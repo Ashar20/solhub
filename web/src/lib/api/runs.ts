@@ -21,6 +21,18 @@ export const getRun = (run_id: string) =>
   apiRequest(`/v1/runs/${run_id}`, WorkflowRunSchema);
 
 /**
+ * Approve a run that is currently in "WaitingApproval" status.
+ * Backend: POST /v1/runs/:run_id/approve — no request body required.
+ * Returns the updated WorkflowRun. (api/src/routes/runs.rs::approve_run)
+ */
+export const approveRun = (run_id: string) =>
+  apiRequest(
+    `/v1/runs/${run_id}/approve`,
+    WorkflowRunSchema,
+    { method: "POST" },
+  );
+
+/**
  * SSE endpoint URL for streaming run logs.
  *
  * NOTE: The backend does NOT accept a `?token=` query parameter — the auth

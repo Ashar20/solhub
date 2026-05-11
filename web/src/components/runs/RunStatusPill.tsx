@@ -11,6 +11,7 @@ const TONE: Record<RunStatus, PillTone> = {
   Retrying: "amber",
   Failed: "rose",
   Skipped: "ink",
+  WaitingApproval: "amber",
 };
 
 export function RunStatusPill({ status }: { status: RunStatus }) {

@@ -1,20 +1,31 @@
 "use client";
 import { use } from "react";
 import Link from "next/link";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Topbar } from "@/components/shell/Topbar";
+import { Btn } from "@/components/primitives/Btn";
+import { Icon } from "@/components/primitives/Icon";
 import { useRun } from "@/lib/hooks/use-runs";
 import { useRunStream } from "@/lib/hooks/use-run-stream";
 import { StepTimeline } from "@/components/runs/StepTimeline";
 import { LiveLogStream } from "@/components/runs/LiveLogStream";
 import { RunStatusPill } from "@/components/runs/RunStatusPill";
+import { approveRun } from "@/lib/api/runs";
 import { formatLamports, formatSlot, solscanTx, formatAddress } from "@/lib/utils/format";
 
 export default function RunDetail({ params }: { params: Promise<{ run_id: string }> }) {
   const { run_id } = use(params);
   const run = useRun(run_id);
   const stream = useRunStream(run_id);
+  const qc = useQueryClient();
+
+  const approve = useMutation({
+    mutationFn: () => approveRun(run_id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["run", run_id] }),
+  });
 
   const network = (process.env.NEXT_PUBLIC_SOLANA_NETWORK as "mainnet" | "devnet") ?? "devnet";
+  const needsApproval = run.data?.status === "WaitingApproval";
 
   return (
     <>
@@ -24,6 +35,17 @@ export default function RunDetail({ params }: { params: Promise<{ run_id: string
           <div className="rounded-xl border border-ink-200 bg-white shadow-card p-4 mb-4">
             <div className="flex items-center gap-3 mb-2 flex-wrap">
               {run.data ? <RunStatusPill status={run.data.status} /> : null}
+              {needsApproval && (
+                <Btn
+                  variant="success"
+                  size="sm"
+                  onClick={() => approve.mutate()}
+                  disabled={approve.isPending}
+                  icon={<Icon name="check" className="w-3.5 h-3.5" />}
+                >
+                  {approve.isPending ? "Approving…" : "Approve"}
+                </Btn>
+              )}
               {run.data?.signature && (
                 <Link
                   href={solscanTx(run.data.signature, network)}

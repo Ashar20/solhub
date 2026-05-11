@@ -14,6 +14,7 @@ export const RunStatusSchema = z.enum([
   "Retrying",
   "Failed",
   "Skipped",
+  "WaitingApproval",
 ]);
 export type RunStatus = z.infer<typeof RunStatusSchema>;
 
