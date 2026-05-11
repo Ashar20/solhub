@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   addEdge, applyEdgeChanges, applyNodeChanges,
@@ -14,6 +14,7 @@ import {
   useUpdateWorkflow,
   useTriggerWorkflow,
 } from "@/lib/hooks/use-workflow-mutations";
+import { ApiError } from "@/lib/api/client";
 import { Btn } from "@/components/primitives/Btn";
 import { Icon } from "@/components/primitives/Icon";
 import { Pill } from "@/components/primitives/Pill";
@@ -183,13 +184,33 @@ export function BuilderShell({ id }: BuilderShellProps) {
   }
 
   async function onTestRun() {
-    if (isNew) return; // must save first
-    setBusy(true); setError(null);
+    if (nodes.length === 0) {
+      setError("Add at least one step before running");
+      return;
+    }
+    setBusy(true);
+    setError(null);
     try {
-      const r = await trigger.mutateAsync({ id });
+      const steps = graphToSteps(nodes, edges, params);
+      let workflowId = id;
+      if (isNew) {
+        const created = await create.mutateAsync({
+          name,
+          trigger: buildTriggerForRequest(),
+          steps,
+        });
+        workflowId = created.workflow_id;
+        clearDraft();
+        router.replace(`/workflows/${workflowId}`);
+      }
+      const r = await trigger.mutateAsync({ id: workflowId });
       router.push(`/runs/${r.run_id}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Trigger failed");
+      if (e instanceof ApiError && e.status === 402) {
+        setError("Not enough credits — top up credits for your org, then try again.");
+      } else {
+        setError(e instanceof Error ? e.message : "Test run failed");
+      }
     } finally {
       setBusy(false);
     }
@@ -212,7 +233,7 @@ export function BuilderShell({ id }: BuilderShellProps) {
   //   - server data hasn't populated nodes yet
   //   - we haven't hydrated already (one-shot)
   // For id === "new" there's no server data, so a non-empty draft wins on mount.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (hydratedFromDraft || !draft) return;
     const draftNodes = (draft.nodes as Node<StepNodeData>[] | undefined) ?? [];
     if (draftNodes.length === 0) return; // empty draft is junk; ignore
@@ -345,7 +366,9 @@ export function BuilderShell({ id }: BuilderShellProps) {
         </div>
         <div className="flex items-center gap-2">
           {error && <span className="text-[11px] text-rose-600 truncate max-w-[180px]">{error}</span>}
-          <Btn variant="default" size="sm" onClick={onTestRun} disabled={busy || isNew}>Test run</Btn>
+          <Btn variant="default" size="sm" onClick={onTestRun} disabled={busy || nodes.length === 0}>
+            {busy ? "Running…" : "Test run"}
+          </Btn>
           <Btn variant="primary" size="sm" onClick={onSave} disabled={busy || nodes.length === 0}>
             {busy ? "Saving…" : "Save"}
           </Btn>

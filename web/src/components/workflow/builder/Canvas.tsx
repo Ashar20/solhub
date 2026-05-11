@@ -29,7 +29,10 @@ function CanvasInner({
   // Without this, fitView only runs on the initial empty mount and the
   // populated nodes are never brought into view.
   useEffect(() => {
-    if (nodes.length === 0) return;
+    if (nodes.length === 0) {
+      fittedFor.current = -1;
+      return;
+    }
     if (fittedFor.current === nodes.length) return;
     fittedFor.current = nodes.length;
     // Defer so React Flow has measured the new nodes before we fit.

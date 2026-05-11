@@ -209,7 +209,8 @@ export const REGISTRY: PluginDef[] = [
       {
         id: "complete",
         name: "Chat Completion",
-        description: "Send a prompt to the LLM and return the response text.",
+        description:
+          "Send a prompt to the LLM. With json_mode=true the engine parses the reply and adds a \"json\" field for downstream steps (OpenAI: JSON mode; Anthropic: prompt + parse).",
         type: "read",
         schema: z.object({
           prompt: z.string().min(1),
@@ -217,8 +218,17 @@ export const REGISTRY: PluginDef[] = [
           model: z.string().optional(),
           max_tokens: z.coerce.number().int().positive().default(512),
           temperature: z.coerce.number().min(0).max(2).default(0.2),
+          json_mode: z.coerce.boolean().optional().default(false),
+          provider: z.enum(["openai", "anthropic"]).optional(),
         }),
-        defaults: { prompt: "", system: "", model: "", max_tokens: 512, temperature: 0.2 },
+        defaults: {
+          prompt: "",
+          system: "",
+          model: "",
+          max_tokens: 512,
+          temperature: 0.2,
+          json_mode: false,
+        },
       },
       {
         id: "analyze_sentiment",

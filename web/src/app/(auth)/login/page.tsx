@@ -7,10 +7,15 @@ import { ApiError, setToken, clearToken } from "@/lib/api/client";
 import { Btn } from "@/components/primitives/Btn";
 import { SolhubLogo } from "@/components/primitives/SolhubLogo";
 
+function devLoginPrefill(): string {
+  if (process.env.NODE_ENV !== "development") return "";
+  return (process.env.NEXT_PUBLIC_DEV_LOGIN_API_KEY ?? "").trim();
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const { signIn } = useAuth();
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState(devLoginPrefill);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 

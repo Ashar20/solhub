@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useLayoutEffect, useState } from "react";
 
 export interface DraftState {
   name: string;
@@ -20,19 +20,23 @@ export interface UseDraftResult {
   clear: () => void;
 }
 
+function readDraft(id: string): DraftState | null {
+  if (typeof window === "undefined") return null;
+  const raw = window.localStorage.getItem(storageKey(id));
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as DraftState;
+  } catch {
+    return null;
+  }
+}
+
 export function useDraft(id: string): UseDraftResult {
   const [draft, setDraft] = useState<DraftState | null>(null);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const raw = window.localStorage.getItem(storageKey(id));
-    if (!raw) { setDraft(null); return; }
-    try {
-      const parsed = JSON.parse(raw) as DraftState;
-      setDraft(parsed);
-    } catch {
-      setDraft(null);
-    }
+  // useLayoutEffect: load before paint so the workflow canvas can measure + fitView on first frame.
+  useLayoutEffect(() => {
+    setDraft(readDraft(id));
   }, [id]);
 
   const save = useCallback((d: Omit<DraftState, "updatedAt">) => {

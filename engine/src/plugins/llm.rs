@@ -69,6 +69,26 @@ impl Default for LlmPlugin {
     }
 }
 
+fn strip_llm_json_fences(raw: &str) -> String {
+    raw.trim()
+        .trim_start_matches("```json")
+        .trim_start_matches("```JSON")
+        .trim_start_matches("```")
+        .trim_end_matches("```")
+        .trim()
+        .to_string()
+}
+
+fn parse_llm_json_object(raw: &str) -> Result<Value, PluginError> {
+    let cleaned = strip_llm_json_fences(raw);
+    serde_json::from_str(&cleaned).map_err(|e| {
+        PluginError::Other(format!(
+            "llm.complete json_mode: invalid JSON ({e}) — raw prefix: {}",
+            raw.chars().take(400).collect::<String>()
+        ))
+    })
+}
+
 #[async_trait]
 impl SolanaKeeperPlugin for LlmPlugin {
     fn id(&self) -> &'static str {
@@ -84,7 +104,7 @@ impl SolanaKeeperPlugin for LlmPlugin {
             ActionDefinition {
                 id: "complete".to_string(),
                 name: "Chat Completion".to_string(),
-                description: "Send a prompt to the LLM and return the response text. Supports openai and anthropic providers.".to_string(),
+                description: "Send a prompt to the LLM and return the response text. Supports openai and anthropic providers. With json_mode=true the reply is parsed as JSON and also returned under \"json\" for downstream steps.".to_string(),
                 action_type: ActionType::ReadOnly,
                 params_schema: json!({
                     "type": "object",
@@ -95,6 +115,11 @@ impl SolanaKeeperPlugin for LlmPlugin {
                         "model": {"type": "string", "description": "Defaults to provider default model"},
                         "max_tokens": {"type": "integer", "default": 512},
                         "temperature": {"type": "number", "default": 0.2},
+                        "json_mode": {
+                            "type": "boolean",
+                            "default": false,
+                            "description": "If true, instruct the model to output only JSON, parse it, and include it in the response as \"json\" alongside \"text\"."
+                        },
                         "provider": {
                             "type": "string",
                             "enum": ["openai", "anthropic"],
@@ -102,7 +127,7 @@ impl SolanaKeeperPlugin for LlmPlugin {
                         }
                     }
                 }),
-                returns_schema: json!({"text": "string", "model": "string", "usage": "object"}),
+                returns_schema: json!({"text": "string", "json": "object (when json_mode)", "model": "string", "usage": "object"}),
             },
             ActionDefinition {
                 id: "analyze_sentiment".to_string(),
@@ -187,8 +212,19 @@ impl SolanaKeeperPlugin for LlmPlugin {
 
 impl LlmPlugin {
     async fn complete(&self, params: &Value) -> Result<Value, PluginError> {
+        let json_mode = params["json_mode"].as_bool().unwrap_or(false);
+        let mut effective = params.clone();
+        if json_mode {
+            let suffix = "Respond with ONLY a single JSON object. Do not use markdown code fences. Do not add text before or after the JSON.";
+            let merged = match params["system"].as_str() {
+                Some(b) if !b.is_empty() => format!("{b}\n\n{suffix}"),
+                _ => suffix.to_string(),
+            };
+            effective["system"] = json!(merged);
+        }
+
         // Determine provider: param > default_provider
-        let provider = params["provider"]
+        let provider = effective["provider"]
             .as_str()
             .map(LlmProvider::from_str)
             .unwrap_or_else(|| match &self.default_provider {
@@ -196,13 +232,25 @@ impl LlmPlugin {
                 LlmProvider::OpenAi => LlmProvider::OpenAi,
             });
 
-        match provider {
-            LlmProvider::Anthropic => self.complete_anthropic(params).await,
-            LlmProvider::OpenAi => self.complete_openai(params).await,
+        let result = match provider {
+            LlmProvider::Anthropic => self.complete_anthropic(&effective).await?,
+            LlmProvider::OpenAi => self.complete_openai(&effective, json_mode).await?,
+        };
+
+        if !json_mode {
+            return Ok(result);
         }
+        let text = result["text"].as_str().unwrap_or("");
+        let parsed = parse_llm_json_object(text)?;
+        Ok(json!({
+            "text": text,
+            "json": parsed,
+            "model": result["model"],
+            "usage": result["usage"],
+        }))
     }
 
-    async fn complete_openai(&self, params: &Value) -> Result<Value, PluginError> {
+    async fn complete_openai(&self, params: &Value, json_mode: bool) -> Result<Value, PluginError> {
         let prompt = params["prompt"]
             .as_str()
             .ok_or_else(|| PluginError::InvalidParam("prompt".into()))?;
@@ -218,12 +266,17 @@ impl LlmPlugin {
         }
         messages.push(json!({"role": "user", "content": prompt}));
 
-        let body = json!({
+        let mut body = json!({
             "model": model,
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
         });
+        if json_mode {
+            body.as_object_mut()
+                .expect("body object")
+                .insert("response_format".to_string(), json!({"type": "json_object"}));
+        }
 
         let url = format!("{}/chat/completions", self.base_url);
         let resp = self
@@ -332,13 +385,8 @@ impl LlmPlugin {
             }))
             .await?;
         let raw = resp["text"].as_str().unwrap_or("{}");
-        let cleaned = raw
-            .trim()
-            .trim_start_matches("```json")
-            .trim_start_matches("```")
-            .trim_end_matches("```")
-            .trim();
-        let parsed: Value = serde_json::from_str(cleaned).map_err(|e| {
+        let cleaned = strip_llm_json_fences(raw);
+        let parsed: Value = serde_json::from_str(&cleaned).map_err(|e| {
             PluginError::Other(format!(
                 "failed to parse sentiment JSON: {}; raw: {}",
                 e, raw
@@ -377,16 +425,8 @@ impl LlmPlugin {
         });
         let resp = self.complete(&completion_params).await?;
         let raw = resp["text"].as_str().unwrap_or("{}");
-
-        // Strip markdown fences if present
-        let cleaned = raw
-            .trim()
-            .trim_start_matches("```json")
-            .trim_start_matches("```")
-            .trim_end_matches("```")
-            .trim();
-
-        let parsed: Value = serde_json::from_str(cleaned).map_err(|_| {
+        let cleaned = strip_llm_json_fences(raw);
+        let parsed: Value = serde_json::from_str(&cleaned).map_err(|_| {
             PluginError::Other(format!("failed to parse rebalance JSON from LLM: {}", raw))
         })?;
 
@@ -471,6 +511,86 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn complete_json_mode_openai_parses_response_into_json_field() {
+        let mut server = Server::new_async().await;
+
+        let content = r#"{"diagnosis":"rpc_timeout","checks":["verify RPC URL"]}"#;
+        let response_val = json!({
+            "id": "chatcmpl-jm",
+            "choices": [{
+                "message": {"role": "assistant", "content": content},
+                "finish_reason": "stop"
+            }],
+            "model": "gpt-4o-mini",
+            "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30}
+        });
+
+        let mock = server
+            .mock("POST", "/chat/completions")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(response_val.to_string())
+            .create_async()
+            .await;
+
+        let mut plugin = LlmPlugin::with_base_url(server.url());
+        plugin.api_key_env = "TEST_OPENAI_JSONMODE_KEY".to_string();
+        std::env::set_var("TEST_OPENAI_JSONMODE_KEY", "test-key");
+
+        let rpc = RpcClient::new("https://api.devnet.solana.com".to_string());
+        let params = json!({"prompt": "Why did execution fail?", "json_mode": true});
+
+        let result = plugin
+            .read("complete", &params, &rpc)
+            .await
+            .expect("json_mode complete should succeed");
+        assert_eq!(result["json"]["diagnosis"], "rpc_timeout");
+        assert_eq!(result["json"]["checks"][0], "verify RPC URL");
+        assert!(result["text"].as_str().is_some());
+
+        mock.assert_async().await;
+        std::env::remove_var("TEST_OPENAI_JSONMODE_KEY");
+    }
+
+    #[tokio::test]
+    async fn complete_json_mode_rejects_non_json_reply() {
+        let mut server = Server::new_async().await;
+
+        let response_val = json!({
+            "id": "chatcmpl-bad",
+            "choices": [{
+                "message": {"role": "assistant", "content": "just prose"},
+                "finish_reason": "stop"
+            }],
+            "model": "gpt-4o-mini",
+            "usage": {"prompt_tokens": 5, "completion_tokens": 2, "total_tokens": 7}
+        });
+
+        let _mock = server
+            .mock("POST", "/chat/completions")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(response_val.to_string())
+            .create_async()
+            .await;
+
+        let mut plugin = LlmPlugin::with_base_url(server.url());
+        plugin.api_key_env = "TEST_OPENAI_JSONMODE_BAD_KEY".to_string();
+        std::env::set_var("TEST_OPENAI_JSONMODE_BAD_KEY", "test-key");
+
+        let rpc = RpcClient::new("https://api.devnet.solana.com".to_string());
+        let params = json!({"prompt": "x", "json_mode": true});
+
+        let result = plugin.read("complete", &params, &rpc).await;
+        assert!(
+            matches!(result, Err(PluginError::Other(ref s)) if s.contains("json_mode")),
+            "expected json_mode parse error, got: {:?}",
+            result
+        );
+        std::env::remove_var("TEST_OPENAI_JSONMODE_BAD_KEY");
+    }
+
+    #[tokio::test]
     async fn complete_returns_error_when_api_key_missing() {
         let plugin = LlmPlugin::with_base_url("https://api.openai.com/v1");
         // Use a unique env var name that is definitely not set
@@ -534,6 +654,7 @@ mod tests {
         let complete = actions.iter().find(|a| a.id == "complete").unwrap();
         let props = &complete.params_schema["properties"];
         assert!(props.get("provider").is_some(), "provider param must be in schema");
+        assert!(props.get("json_mode").is_some(), "json_mode param must be in schema");
         let provider_enum = &props["provider"]["enum"];
         let values: Vec<&str> = provider_enum
             .as_array()

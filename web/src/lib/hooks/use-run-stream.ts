@@ -53,24 +53,46 @@ export function useRunStream(run_id: string | undefined): UseRunStreamResult {
     setEvents([]);
     setState("streaming");
 
-    const es = new EventSource(proxyUrl(run_id));
-    esRef.current = es;
-
-    es.onmessage = (e) => {
-      try {
-        const evt = RunLogEventSchema.parse(JSON.parse(e.data as string));
-        setEvents((prev) => [...prev, evt]);
-        if (evt.event === "run_complete") {
-          es.close();
-          setState("closed");
-          void qc.invalidateQueries({ queryKey: ["run", run_id] });
-        }
-      } catch {
-        // Drop malformed events silently
+    let closedNormally = false;
+    /** Backend emits named SSE events; EventSource.onmessage only receives the default type. */
+    const append = (evt: RunLogEvent) => {
+      setEvents((prev) => [...prev, evt]);
+      if (evt.event === "run_complete") {
+        closedNormally = true;
+        esRef.current?.close();
+        esRef.current = null;
+        clearPolling();
+        setState("closed");
+        void qc.invalidateQueries({ queryKey: ["run", run_id] });
       }
     };
 
+    const onStepLog = (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(String(e.data));
+        append(RunLogEventSchema.parse({ event: "step_log", data }));
+        void qc.invalidateQueries({ queryKey: ["run", run_id] });
+      } catch {
+        // drop malformed
+      }
+    };
+
+    const onRunComplete = (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(String(e.data));
+        append(RunLogEventSchema.parse({ event: "run_complete", data }));
+      } catch {
+        // drop malformed
+      }
+    };
+
+    const es = new EventSource(proxyUrl(run_id));
+    esRef.current = es;
+    es.addEventListener("step_log", onStepLog);
+    es.addEventListener("run_complete", onRunComplete);
+
     es.onerror = () => {
+      if (closedNormally || pollRef.current != null) return;
       es.close();
       esRef.current = null;
       setState("polling");
@@ -95,7 +117,12 @@ export function useRunStream(run_id: string | undefined): UseRunStreamResult {
       }, 1000);
     };
 
-    return close;
+    return () => {
+      closedNormally = true;
+      es.removeEventListener("step_log", onStepLog);
+      es.removeEventListener("run_complete", onRunComplete);
+      close();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [run_id, qc]);
 

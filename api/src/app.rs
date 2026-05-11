@@ -1,14 +1,58 @@
 use axum::{
+    http::{HeaderValue, Method},
     middleware as ax_mw,
     routing::{delete, get, post},
     Router,
 };
-use tower_http::trace::TraceLayer;
+use tower_http::{
+    cors::{AllowOrigin, Any, CorsLayer},
+    trace::TraceLayer,
+};
 
 use crate::{
     middleware::{auth::auth_middleware, rate_limit::rate_limit_middleware},
     state::AppState,
 };
+
+/// Browser clients (Next.js dev server, etc.) need CORS. Preflight OPTIONS must succeed
+/// before `Authorization` is sent; this layer handles that ahead of auth middleware.
+fn cors_layer() -> CorsLayer {
+    if let Ok(raw) = std::env::var("SOLHUB_CORS_ORIGINS") {
+        let trimmed = raw.trim();
+        if trimmed == "*" {
+            return CorsLayer::permissive();
+        }
+        let origins: Vec<HeaderValue> = trimmed
+            .split(',')
+            .filter_map(|s| HeaderValue::from_str(s.trim()).ok())
+            .collect();
+        if !origins.is_empty() {
+            return CorsLayer::new()
+                .allow_origin(AllowOrigin::list(origins))
+                .allow_methods([
+                    Method::GET,
+                    Method::POST,
+                    Method::PATCH,
+                    Method::DELETE,
+                    Method::OPTIONS,
+                ])
+                .allow_headers(Any);
+        }
+    }
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::list([
+            HeaderValue::from_static("http://localhost:3000"),
+            HeaderValue::from_static("http://127.0.0.1:3000"),
+        ]))
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers(Any)
+}
 
 pub fn build_router(state: AppState) -> Router {
     let auth_routes = Router::new()
@@ -93,4 +137,5 @@ pub fn build_router(state: AppState) -> Router {
         .merge(public_routes)
         .with_state(state)
         .layer(TraceLayer::new_for_http())
+        .layer(cors_layer())
 }

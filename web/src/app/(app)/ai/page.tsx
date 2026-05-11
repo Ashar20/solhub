@@ -3,8 +3,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Topbar } from "@/components/shell/Topbar";
 import { Btn } from "@/components/primitives/Btn";
-import { Pill } from "@/components/primitives/Pill";
 import { Icon } from "@/components/primitives/Icon";
+import { buildAiBuilderSeed } from "@/lib/ai/prompt-to-graph";
 
 const EXAMPLES = [
   "Every 6 hours, snapshot my Solana portfolio, check the Crypto Fear & Greed Index, and ask the LLM whether I should rebalance. Emit the recommendation to my Trade Executor workflow.",
@@ -23,29 +23,8 @@ interface DraftSeed {
 }
 
 function buildSeed(prompt: string): DraftSeed {
-  const id = "step_llm_seed";
-  return {
-    name: "AI-built workflow",
-    nodes: [
-      {
-        id,
-        type: "step",
-        position: { x: 80, y: 160 },
-        data: { label: "llm.complete", plugin: "llm", action: "complete" },
-      },
-    ],
-    edges: [],
-    params: {
-      [id]: {
-        prompt,
-        system: "Respond with structured JSON.",
-        model: "claude-sonnet-4-6",
-        max_tokens: 512,
-        temperature: 0.2,
-      },
-    },
-    updatedAt: new Date().toISOString(),
-  };
+  const graph = buildAiBuilderSeed(prompt);
+  return { ...graph, updatedAt: new Date().toISOString() };
 }
 
 export default function AiBuilderPage() {
@@ -55,7 +34,8 @@ export default function AiBuilderPage() {
   function openInBuilder() {
     if (!prompt.trim()) return;
     window.localStorage.setItem(SEED_KEY, JSON.stringify(buildSeed(prompt.trim())));
-    router.push("/workflows/new");
+    // `from` forces a remount so a new AI seed is not skipped by stale builder state.
+    router.push(`/workflows/new?from=${Date.now()}`);
   }
 
   return (
@@ -65,9 +45,9 @@ export default function AiBuilderPage() {
         <section>
           <h1 className="text-[22px] font-semibold tracking-tight mb-1">Describe a workflow</h1>
           <p className="text-[13px] text-ink-500 mb-4">
-            Sketch what you want in plain English. We&apos;ll seed the builder with an{" "}
-            <Pill tone="violet">llm.complete</Pill> node containing your prompt — refine the rest
-            visually.
+            Describe the automation in plain English. We infer a <strong>connected</strong> chain of
+            plugin steps (portfolio, news, Jupiter, LLM, webhooks, notifications, …) from keywords in
+            your prompt — then you can drag, rewire, and tune params in the builder.
           </p>
           <textarea
             value={prompt}
@@ -87,9 +67,9 @@ export default function AiBuilderPage() {
             </Btn>
           </div>
           <p className="text-[11px] text-ink-500 mt-3 leading-relaxed">
-            Note: dedicated AI scaffolding (auto-generating multi-step workflows from the prompt) is
-            on the roadmap. For now the prompt is seeded into a single LLM node so you can extend it
-            with other plugin steps.
+            Inference is keyword-based (not a live LLM graph generator). Mention tools explicitly —
+            e.g. &quot;Pyth&quot;, &quot;Telegram&quot;, &quot;emit webhook&quot;, &quot;Jupiter quote&quot;
+            — for best results.
           </p>
         </section>
         <aside>
