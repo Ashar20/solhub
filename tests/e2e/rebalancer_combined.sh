@@ -148,6 +148,17 @@ SCOUT_BODY=$(cat <<JSON
       "params": {"ids": ["So11111111111111111111111111111111111111112", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"]}
     },
     {
+      "id": "reason",
+      "plugin": "llm",
+      "action": "recommend_rebalance",
+      "params": {
+        "provider": "openai",
+        "portfolio": {"current_weights": {"SOL": 0.60, "USDC": 0.40}},
+        "signals": {"fng": 48, "news_summary": "neutral crypto headlines, no major events"},
+        "risk_profile": "balanced"
+      }
+    },
+    {
       "id": "emit",
       "plugin": "solhub",
       "action": "emit_webhook",
