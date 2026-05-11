@@ -1,5 +1,5 @@
 "use client";
-import { use, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Topbar } from "@/components/shell/Topbar";
 import { Btn } from "@/components/primitives/Btn";
@@ -12,8 +12,8 @@ import { NETWORK } from "@/lib/solana/connection";
 import { findAction } from "@/lib/plugins/registry";
 import type { WorkflowStep } from "@/lib/api/schemas";
 
-export default function MarketplaceDetail({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function MarketplaceDetail({ params }: { params: { id: string } }) {
+  const { id } = params;
   const { data, isLoading } = useHub();
   const wf = (data ?? []).find((w) => w.id === id);
   const [open, setOpen] = useState(false);

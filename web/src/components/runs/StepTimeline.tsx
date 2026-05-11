@@ -5,8 +5,10 @@ const TONE: Record<StepLog["status"], PillTone> = {
   Pending: "ink",
   Running: "violet",
   Success: "emerald",
+  Completed: "emerald",
   Failed: "rose",
   Skipped: "ink",
+  WaitingApproval: "amber",
 };
 
 export function StepTimeline({ steps }: { steps: StepLog[] }) {

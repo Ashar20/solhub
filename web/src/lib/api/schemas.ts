@@ -19,14 +19,20 @@ export const RunStatusSchema = z.enum([
 export type RunStatus = z.infer<typeof RunStatusSchema>;
 
 // ---------------------------------------------------------------------------
-// StepStatus — PascalCase, no serde attrs on engine/src/state/run.rs:27-34.
+// StepStatus — PascalCase. The Rust enum (engine/src/state/run.rs) declares
+// {Pending, Running, Success, Failed, Skipped}, but the executor writes step
+// statuses directly as JSON strings (engine/src/executor/worker.rs) including
+// "Completed" and "WaitingApproval" that aren't in the enum. Accept the
+// union of the declared enum + the runtime emissions.
 // ---------------------------------------------------------------------------
 export const StepStatusSchema = z.enum([
   "Pending",
   "Running",
   "Success",
+  "Completed",
   "Failed",
   "Skipped",
+  "WaitingApproval",
 ]);
 export type StepStatus = z.infer<typeof StepStatusSchema>;
 

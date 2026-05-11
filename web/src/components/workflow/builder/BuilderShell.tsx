@@ -1,7 +1,10 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Node, Edge } from "reactflow";
+import {
+  addEdge, applyEdgeChanges, applyNodeChanges,
+  type Connection, type Edge, type EdgeChange, type Node, type NodeChange,
+} from "reactflow";
 import { useWorkflow, useWorkflows } from "@/lib/hooks/use-workflows";
 import { useDraft } from "@/lib/hooks/use-draft";
 import { findAction } from "@/lib/plugins/registry";
@@ -103,6 +106,19 @@ export function BuilderShell({ id }: BuilderShellProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => setNodes((ns) => applyNodeChanges(changes, ns)),
+    [],
+  );
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange[]) => setEdges((es) => applyEdgeChanges(changes, es)),
+    [],
+  );
+  const onConnect = useCallback(
+    (c: Connection) => setEdges((es) => addEdge({ ...c, animated: true }, es)),
+    [],
+  );
+
   function buildTriggerForRequest(): { type: "cron" | "webhook" | "manual" | "price_alert" | "on_chain"; [k: string]: unknown } {
     if (!isNew && data?.trigger_type) {
       const t = data.trigger_type as "cron" | "webhook" | "manual" | "price_alert" | "on_chain";
@@ -190,16 +206,20 @@ export function BuilderShell({ id }: BuilderShellProps) {
   }, [data?.steps]);
 
   // Hydrate from draft only if:
-  //   - we have a draft
-  //   - server data hasn't populated nodes yet (i.e. canvas is empty)
+  //   - we have a draft AND the draft actually has nodes (skip empty drafts —
+  //     they were written by the old broken auto-save and would race-override
+  //     the server data with [])
+  //   - server data hasn't populated nodes yet
   //   - we haven't hydrated already (one-shot)
-  // For id === "new" there's no server data, so the draft always wins on mount.
+  // For id === "new" there's no server data, so a non-empty draft wins on mount.
   useEffect(() => {
     if (hydratedFromDraft || !draft) return;
+    const draftNodes = (draft.nodes as Node<StepNodeData>[] | undefined) ?? [];
+    if (draftNodes.length === 0) return; // empty draft is junk; ignore
     if (data?.steps && (data.steps as ApiStep[]).length > 0) return; // server wins
     if (nodes.length > 0) return; // user already started editing
     setName(draft.name);
-    setNodes(draft.nodes as Node<StepNodeData>[]);
+    setNodes(draftNodes);
     setEdges(draft.edges as Edge[]);
     setParams(draft.params);
     setHydratedFromDraft(true);
@@ -207,7 +227,10 @@ export function BuilderShell({ id }: BuilderShellProps) {
   }, [draft, data?.steps]);
 
   // Debounced auto-save: write a draft 500ms after the last change.
+  // Skip empty graphs — auto-saving [] would clobber the server data on
+  // future mounts before it hydrates.
   useEffect(() => {
+    if (nodes.length === 0) return;
     const t = setTimeout(() => {
       saveDraft({
         name,
@@ -331,15 +354,17 @@ export function BuilderShell({ id }: BuilderShellProps) {
           </Btn>
         </div>
       </header>
-      <div className="flex-1 grid grid-cols-[240px_1fr_320px] overflow-hidden">
+      <div className="flex-1 min-h-0 grid grid-cols-[240px_1fr_320px] grid-rows-[1fr] overflow-hidden">
         <aside className="border-r border-ink-200 bg-white">
           <ToolPalette onAdd={addStep} />
         </aside>
-        <main className="bg-ink-50">
+        <main className="bg-ink-50 h-full w-full overflow-hidden">
           <Canvas
-            key={data?.id ?? "new"}
-            initialNodes={nodes}
-            initialEdges={edges}
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
             onSelect={setSelectedId}
           />
         </main>

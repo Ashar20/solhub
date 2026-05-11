@@ -5,9 +5,9 @@ const BACKEND_BASE =
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ run_id: string }> },
+  { params }: { params: { run_id: string } },
 ) {
-  const { run_id } = await params;
+  const { run_id } = params;
   const token = req.nextUrl.searchParams.get("token");
 
   if (!token) {

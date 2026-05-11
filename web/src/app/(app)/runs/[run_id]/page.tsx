@@ -1,5 +1,4 @@
 "use client";
-import { use } from "react";
 import Link from "next/link";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Topbar } from "@/components/shell/Topbar";
@@ -13,8 +12,8 @@ import { RunStatusPill } from "@/components/runs/RunStatusPill";
 import { approveRun } from "@/lib/api/runs";
 import { formatLamports, formatSlot, solscanTx, formatAddress } from "@/lib/utils/format";
 
-export default function RunDetail({ params }: { params: Promise<{ run_id: string }> }) {
-  const { run_id } = use(params);
+export default function RunDetail({ params }: { params: { run_id: string } }) {
+  const { run_id } = params;
   const run = useRun(run_id);
   const stream = useRunStream(run_id);
   const qc = useQueryClient();
