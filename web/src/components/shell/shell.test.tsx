@@ -1,7 +1,14 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { Breadcrumb } from "./Breadcrumb";
 import { Topbar } from "./Topbar";
+
+vi.mock("@solana/wallet-adapter-react", () => ({
+  useWallet: () => ({ connected: false, publicKey: null, disconnect: vi.fn() }),
+}));
+vi.mock("@solana/wallet-adapter-react-ui", () => ({
+  useWalletModal: () => ({ setVisible: vi.fn() }),
+}));
 
 describe("Breadcrumb", () => {
   it("renders each item", () => {

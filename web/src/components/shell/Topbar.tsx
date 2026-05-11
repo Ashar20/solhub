@@ -2,6 +2,8 @@
 import { Breadcrumb } from "./Breadcrumb";
 import { Icon } from "@/components/primitives/Icon";
 import { Kbd } from "@/components/primitives/Kbd";
+import { NetworkChip } from "@/components/wallet/NetworkChip";
+import { ConnectButton } from "@/components/wallet/ConnectButton";
 
 export function Topbar({ crumbs, right }: { crumbs: string[]; right?: React.ReactNode }) {
   return (
@@ -9,6 +11,8 @@ export function Topbar({ crumbs, right }: { crumbs: string[]; right?: React.Reac
       <Breadcrumb items={crumbs} />
       <div className="flex items-center gap-2">
         {right}
+        <NetworkChip />
+        <ConnectButton />
         <div className="flex items-center h-8 rounded-md border border-ink-200 bg-ink-50">
           <Icon name="search" className="w-3.5 h-3.5 text-ink-400 ml-2.5" />
           <input
