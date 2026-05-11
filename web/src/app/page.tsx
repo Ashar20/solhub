@@ -1,1 +1,5 @@
-export default function Home() { return <main className="p-8 text-ink-900">Solhub</main>; }
+import { redirect } from "next/navigation";
+
+export default function RootIndex() {
+  redirect("/dashboard");
+}
