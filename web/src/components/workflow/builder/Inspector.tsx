@@ -16,6 +16,18 @@ export interface InspectorProps {
   currentWorkflowId?: string;
 }
 
+/** Plugin/action/field combos that should render a WorkflowPicker instead of a text input. */
+const WORKFLOW_PICKER_FIELDS: Array<{ plugin: string; action: string; field: string }> = [
+  { plugin: "solhub", action: "run_workflow", field: "workflow_id" },
+  { plugin: "solhub", action: "emit_webhook", field: "target_workflow_id" },
+];
+
+function pickerFieldFor(plugin: string, action: string): string | null {
+  return (
+    WORKFLOW_PICKER_FIELDS.find((x) => x.plugin === plugin && x.action === action)?.field ?? null
+  );
+}
+
 export function Inspector({
   node, params, onParamsChange, onDelete, currentWorkflowId,
 }: InspectorProps) {
@@ -31,7 +43,9 @@ export function Inspector({
     );
   }
 
+  const pickerField = pickerFieldFor(node.data.plugin, node.data.action);
   const isSubWorkflow = node.data.plugin === "solhub" && node.data.action === "run_workflow";
+  const isEmitWebhook = node.data.plugin === "solhub" && node.data.action === "emit_webhook";
 
   return (
     <div className="p-4 space-y-4">
@@ -41,15 +55,18 @@ export function Inspector({
           <Pill tone="ink">{found.action.name}</Pill>
           {found.plugin.status === "stub" && <Pill tone="amber">stub</Pill>}
           {isSubWorkflow && <Pill tone="sol">sub-workflow</Pill>}
+          {isEmitWebhook && <Pill tone="sol">emit-webhook</Pill>}
         </div>
         <h2 className="text-[15px] font-semibold tracking-tight">{found.action.name}</h2>
         <p className="text-[12px] text-ink-500">{found.action.description}</p>
       </div>
 
-      {isSubWorkflow ? (
-        <SubWorkflowForm
+      {pickerField ? (
+        <WorkflowPickerForm
+          action={found.action as unknown as { schema: z.ZodObject<z.ZodRawShape> }}
           params={params}
           onChange={onParamsChange}
+          pickerField={pickerField}
           excludeId={currentWorkflowId}
         />
       ) : (
@@ -70,42 +87,35 @@ export function Inspector({
   );
 }
 
-function SubWorkflowForm({
-  params, onChange, excludeId,
+function WorkflowPickerForm({
+  action, params, onChange, pickerField, excludeId,
 }: {
+  action: { schema: z.ZodObject<z.ZodRawShape> };
   params: Record<string, unknown>;
   onChange: (next: Record<string, unknown>) => void;
+  pickerField: string;
   excludeId?: string;
 }) {
-  const workflowId = typeof params.workflow_id === "string" ? params.workflow_id : "";
-  const timeoutSecs = typeof params.timeout_secs === "number" || typeof params.timeout_secs === "string"
-    ? String(params.timeout_secs)
-    : "60";
+  const pickerValue = typeof params[pickerField] === "string" ? (params[pickerField] as string) : "";
 
   return (
     <div className="space-y-3">
       <div>
         <span className="text-[11px] uppercase font-mono text-ink-500 tracking-wider block mb-1">
-          workflow
+          {pickerField}
         </span>
         <WorkflowPicker
-          value={workflowId}
-          onChange={(id) => onChange({ ...params, workflow_id: id })}
+          value={pickerValue}
+          onChange={(id) => onChange({ ...params, [pickerField]: id })}
           excludeId={excludeId}
         />
       </div>
-      <label className="block">
-        <span className="text-[11px] uppercase font-mono text-ink-500 tracking-wider">
-          timeout_secs
-        </span>
-        <input
-          type="text"
-          inputMode="numeric"
-          value={timeoutSecs}
-          onChange={(e) => onChange({ ...params, timeout_secs: e.target.value })}
-          className="mt-1 w-full h-8 px-2 rounded-md border border-ink-200 text-[13px] font-mono"
-        />
-      </label>
+      <ZodForm
+        schema={action.schema}
+        value={params}
+        onChange={onChange}
+        skip={[pickerField]}
+      />
     </div>
   );
 }

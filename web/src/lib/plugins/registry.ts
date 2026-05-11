@@ -1,6 +1,17 @@
 import { z } from "zod";
 import type { PluginDef } from "./types";
 
+/** Preprocess helper: parse JSON strings into the inner type for array/object params. */
+function jsonParam<T extends z.ZodTypeAny>(inner: T) {
+  return z.preprocess(
+    (v) =>
+      typeof v === "string"
+        ? (() => { try { return JSON.parse(v); } catch { return v; } })()
+        : v,
+    inner,
+  );
+}
+
 export const REGISTRY: PluginDef[] = [
   // ──────────────────────────────────────────────────────────────────
   // REAL implementations
@@ -36,6 +47,16 @@ export const REGISTRY: PluginDef[] = [
           slippage_bps: z.coerce.number().int().min(0).max(10_000).default(50),
         }),
         defaults: { input_mint: "", output_mint: "", amount: 1_000_000, slippage_bps: 50 },
+      },
+      {
+        id: "price",
+        name: "Token Prices",
+        description: "Fetch USD prices for one or more token mints from Jupiter Price API v3.",
+        type: "read",
+        schema: z.object({
+          ids: jsonParam(z.array(z.string()).min(1)),
+        }),
+        defaults: { ids: '["So11111111111111111111111111111111111111112"]' },
       },
     ],
   },
@@ -240,6 +261,18 @@ export const REGISTRY: PluginDef[] = [
         }),
         defaults: { url: "", max_bytes: 65536 },
       },
+      {
+        id: "crypto_panic",
+        name: "CryptoPanic News",
+        description: "Fetch crypto news posts from CryptoPanic.",
+        type: "read",
+        schema: z.object({
+          filter: z.enum(["rising", "hot", "bullish", "bearish", "important"]).optional(),
+          currencies: jsonParam(z.array(z.string())).optional(),
+          limit: z.coerce.number().int().positive().default(10),
+        }),
+        defaults: { filter: "important", currencies: '["SOL","BTC"]', limit: 10 },
+      },
     ],
   },
   {
@@ -258,6 +291,135 @@ export const REGISTRY: PluginDef[] = [
           timeout_secs: z.coerce.number().int().positive().default(60),
         }),
         defaults: { workflow_id: "", timeout_secs: 60 },
+      },
+      {
+        id: "delta_calc",
+        name: "Portfolio Delta Calculator",
+        description: "Compute rebalancing swaps from current to target weights.",
+        type: "read",
+        schema: z.object({
+          current: jsonParam(z.record(z.unknown())),
+          target: jsonParam(z.record(z.unknown())),
+          total_value_usd: z.coerce.number().positive(),
+        }),
+        defaults: {
+          current: '{"SOL":50,"USDC":50}',
+          target: '{"SOL":45,"USDC":55}',
+          total_value_usd: 10000,
+        },
+      },
+      {
+        id: "guard_rails",
+        name: "Guard Rails",
+        description: "Validate proposed swaps against safety rules before execution.",
+        type: "read",
+        schema: z.object({
+          swaps: jsonParam(z.array(z.unknown())),
+          total_value_usd: z.coerce.number().positive(),
+          confidence_score: z.coerce.number().min(0).max(100),
+          quotes: jsonParam(z.array(z.unknown())).optional(),
+          rules: jsonParam(z.record(z.unknown())).optional(),
+        }),
+        defaults: {
+          swaps: "[]",
+          total_value_usd: 10000,
+          confidence_score: 75,
+          quotes: "[]",
+          rules: '{"max_single_swap_pct":15,"max_slippage_pct":1,"min_confidence":0.6}',
+        },
+      },
+      {
+        id: "emit_webhook",
+        name: "Emit Webhook",
+        description: "POST a payload to another workflow's webhook endpoint.",
+        type: "read",
+        schema: z.object({
+          target_workflow_id: z.string().uuid(),
+          payload: jsonParam(z.record(z.unknown())),
+          secret: z.string().optional(),
+          base_url: z.string().optional(),
+        }),
+        defaults: { target_workflow_id: "", payload: '{}', secret: "", base_url: "" },
+      },
+      {
+        id: "require_approval",
+        name: "Human-In-The-Loop Approval",
+        description: "Pauses the workflow run, awaits approval via POST /v1/runs/:id/approve.",
+        type: "read",
+        schema: z.object({
+          message: z.string().optional(),
+          timeout_secs: z.coerce.number().int().nonnegative().optional(),
+        }),
+        defaults: { message: "Please review before proceeding.", timeout_secs: 600 },
+      },
+    ],
+  },
+  {
+    id: "portfolio",
+    name: "Portfolio",
+    category: "logic",
+    status: "real",
+    actions: [
+      {
+        id: "snapshot",
+        name: "Portfolio Snapshot",
+        description: "Fetch SOL + SPL token balances with USD values.",
+        type: "read",
+        schema: z.object({
+          account: z.string().min(32),
+          include_spl: z.coerce.boolean().default(true),
+          price_in: z.string().default("USDC"),
+        }),
+        defaults: { account: "", include_spl: true, price_in: "USDC" },
+      },
+      {
+        id: "compute_weights",
+        name: "Compute Portfolio Weights",
+        description: "Compute current vs target allocation weights.",
+        type: "read",
+        schema: z.object({
+          holdings: jsonParam(z.array(z.unknown())),
+          targets: jsonParam(z.record(z.unknown())),
+        }),
+        defaults: { holdings: "[]", targets: '{"SOL":50,"USDC":50}' },
+      },
+      {
+        id: "detect_drift",
+        name: "Detect Drift",
+        description: "Detect whether any holding has drifted beyond a threshold.",
+        type: "read",
+        schema: z.object({
+          holdings: jsonParam(z.array(z.unknown())),
+          targets: jsonParam(z.record(z.unknown())),
+          threshold_pct: z.coerce.number().positive().default(5.0),
+        }),
+        defaults: { holdings: "[]", targets: '{"SOL":50,"USDC":50}', threshold_pct: 5 },
+      },
+    ],
+  },
+  {
+    id: "fear_greed",
+    name: "Fear & Greed Index",
+    category: "logic",
+    status: "real",
+    actions: [
+      {
+        id: "current",
+        name: "Current Fear & Greed",
+        description: "Fetch the current crypto Fear & Greed Index (0–100) from alternative.me.",
+        type: "read",
+        schema: z.object({}),
+        defaults: {},
+      },
+      {
+        id: "history",
+        name: "Fear & Greed History",
+        description: "Fetch historical Fear & Greed Index values.",
+        type: "read",
+        schema: z.object({
+          limit: z.coerce.number().int().positive().default(30),
+        }),
+        defaults: { limit: 30 },
       },
     ],
   },

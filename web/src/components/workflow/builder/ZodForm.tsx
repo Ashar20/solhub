@@ -38,14 +38,16 @@ export interface ZodFormProps {
   schema: z.ZodObject<z.ZodRawShape>;
   value: Record<string, unknown>;
   onChange: (next: Record<string, unknown>) => void;
+  /** Keys to skip rendering (used when a custom field like WorkflowPicker is rendered above). */
+  skip?: readonly string[];
 }
 
-export function ZodForm({ schema, value, onChange }: ZodFormProps) {
+export function ZodForm({ schema, value, onChange, skip }: ZodFormProps) {
   const shape = schema.shape as Record<string, ZodTypeAny>;
 
   return (
     <div className="space-y-3">
-      {Object.entries(shape).map(([key, raw]) => {
+      {Object.entries(shape).filter(([key]) => !skip?.includes(key)).map(([key, raw]) => {
         const kind = kindOf(raw);
         const current = value[key];
 

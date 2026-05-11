@@ -153,3 +153,26 @@ describe("REGISTRY new plugins", () => {
     expect(findAction("system", "batch_transfer")).not.toBe(null);
   });
 });
+
+describe("REGISTRY rebalancer additions", () => {
+  it("includes portfolio.snapshot|compute_weights|detect_drift", () => {
+    expect(findAction("portfolio", "snapshot")).not.toBe(null);
+    expect(findAction("portfolio", "compute_weights")).not.toBe(null);
+    expect(findAction("portfolio", "detect_drift")).not.toBe(null);
+  });
+  it("includes fear_greed.current and history", () => {
+    expect(findAction("fear_greed", "current")).not.toBe(null);
+    expect(findAction("fear_greed", "history")).not.toBe(null);
+  });
+  it("includes news.crypto_panic", () => {
+    expect(findAction("news", "crypto_panic")).not.toBe(null);
+  });
+  it("includes jupiter.price", () => {
+    expect(findAction("jupiter", "price")).not.toBe(null);
+  });
+  it("includes solhub.delta_calc|guard_rails|emit_webhook|require_approval", () => {
+    for (const a of ["delta_calc", "guard_rails", "emit_webhook", "require_approval"]) {
+      expect(findAction("solhub", a)).not.toBe(null);
+    }
+  });
+});

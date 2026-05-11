@@ -1,16 +1,18 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Node, Edge } from "reactflow";
 import { useWorkflow, useWorkflows } from "@/lib/hooks/use-workflows";
 import { useDraft } from "@/lib/hooks/use-draft";
 import { findAction } from "@/lib/plugins/registry";
+import { EXAMPLES, exampleToGraph, type WorkflowExample } from "@/lib/plugins/examples";
 import {
   useCreateWorkflow,
   useUpdateWorkflow,
   useTriggerWorkflow,
 } from "@/lib/hooks/use-workflow-mutations";
 import { Btn } from "@/components/primitives/Btn";
+import { Icon } from "@/components/primitives/Icon";
 import { Pill } from "@/components/primitives/Pill";
 import { SolhubLogo } from "@/components/primitives/SolhubLogo";
 import { Canvas } from "./Canvas";
@@ -217,7 +219,7 @@ export function BuilderShell({ id }: BuilderShellProps) {
     return () => clearTimeout(t);
   }, [name, nodes, edges, params, saveDraft]);
 
-  // Keep sub-workflow node labels in sync with picked workflow_id → workflow name.
+  // Keep sub-workflow / emit_webhook node labels in sync with picked workflow id → name.
   // Runs only when allWorkflows or params change; uses functional setNodes to avoid
   // adding `nodes` to the dependency array (which would create an update loop).
   useEffect(() => {
@@ -225,8 +227,13 @@ export function BuilderShell({ id }: BuilderShellProps) {
     setNodes((prev) => {
       let changed = false;
       const next = prev.map((n) => {
-        if (n.data.plugin !== "solhub" || n.data.action !== "run_workflow") return n;
-        const pickedId = params[n.id]?.workflow_id;
+        const isPicker =
+          n.data.plugin === "solhub" &&
+          (n.data.action === "run_workflow" || n.data.action === "emit_webhook");
+        if (!isPicker) return n;
+        const pickedField =
+          n.data.action === "run_workflow" ? "workflow_id" : "target_workflow_id";
+        const pickedId = params[n.id]?.[pickedField];
         if (typeof pickedId !== "string" || !pickedId) {
           if (n.data.subWorkflowName != null) {
             changed = true;
@@ -301,6 +308,17 @@ export function BuilderShell({ id }: BuilderShellProps) {
           />
           {!isNew && (data?.is_active ? <Pill tone="emerald">live</Pill> : <Pill tone="amber">draft</Pill>)}
           {isNew && <Pill tone="ink">new</Pill>}
+          {isNew && nodes.length === 0 && (
+            <ExamplePicker
+              onLoad={(ex) => {
+                const g = exampleToGraph(ex);
+                setName(g.name);
+                setNodes(g.nodes);
+                setEdges(g.edges);
+                setParams(g.params);
+              }}
+            />
+          )}
         </div>
         <div className="flex items-center gap-2">
           {error && <span className="text-[11px] text-rose-600 truncate max-w-[180px]">{error}</span>}
@@ -335,6 +353,46 @@ export function BuilderShell({ id }: BuilderShellProps) {
           />
         </aside>
       </div>
+    </div>
+  );
+}
+
+function ExamplePicker({ onLoad }: { onLoad: (ex: WorkflowExample) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (!ref.current?.contains(e.target as HTMLElement)) setOpen(false);
+    }
+    if (open) document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <Btn
+        size="sm"
+        variant="ghost"
+        icon={<Icon name="spark" className="w-3 h-3" />}
+        onClick={() => setOpen(!open)}
+      >
+        Load example
+      </Btn>
+      {open && (
+        <div className="absolute top-full mt-1 w-[320px] rounded-md border border-ink-200 bg-white shadow-pop z-50">
+          {EXAMPLES.map((ex) => (
+            <button
+              key={ex.id}
+              onClick={() => { onLoad(ex); setOpen(false); }}
+              className="block w-full text-left px-3 py-2 hover:bg-ink-50 border-b border-ink-100 last:border-b-0"
+            >
+              <div className="text-[13px] font-medium">{ex.name}</div>
+              <div className="text-[11px] text-ink-500 line-clamp-2">{ex.description}</div>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
