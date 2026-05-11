@@ -53,8 +53,8 @@ export default function WorkflowsList() {
           />
         </div>
         <div className="rounded-xl border border-ink-200 bg-white shadow-card overflow-hidden">
-          <div className="grid grid-cols-[1fr_140px_120px_140px] items-center px-4 h-9 border-b border-ink-200 text-[11px] uppercase tracking-wider font-mono text-ink-500">
-            <div>Name</div><div>Status</div><div>Runs</div><div className="text-right">Updated</div>
+          <div className="grid grid-cols-[1fr_140px_120px_140px_140px] items-center px-4 h-9 border-b border-ink-200 text-[11px] uppercase tracking-wider font-mono text-ink-500">
+            <div>Name</div><div>Status</div><div>Runs</div><div>Updated</div><div className="text-right">Actions</div>
           </div>
           {isLoading && <div className="p-6 text-[12px] text-ink-500">Loading…</div>}
           {!isLoading && filtered.length === 0 && (
