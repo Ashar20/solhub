@@ -1,7 +1,11 @@
 "use client";
+import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Topbar } from "@/components/shell/Topbar";
 import { BalanceCard } from "@/components/wallet/BalanceCard";
+import { DepositDialog } from "@/components/wallet/DepositDialog";
+import { WithdrawDialog } from "@/components/wallet/WithdrawDialog";
+import { Btn } from "@/components/primitives/Btn";
 import { useMe } from "@/lib/hooks/use-org";
 import { useSolBalance, useUsdcBalance } from "@/lib/hooks/use-balances";
 import { formatLamports, formatUsdc } from "@/lib/utils/format";
@@ -12,6 +16,8 @@ export default function WalletPage() {
   const { publicKey, connected } = useWallet();
   const sol = useSolBalance();
   const usdc = useUsdcBalance();
+  const [openDeposit, setOpenDeposit] = useState(false);
+  const [openWithdraw, setOpenWithdraw] = useState(false);
 
   return (
     <>
@@ -20,12 +26,22 @@ export default function WalletPage() {
         <div className="grid grid-cols-2 gap-4">
           <BalanceCard
             title="Personal wallet"
-            subtitle={connected ? "Connected" : "Not connected — use Connect in the topbar"}
+            subtitle={
+              connected
+                ? "Connected"
+                : "Not connected — use Connect in the topbar"
+            }
             address={connected ? publicKey?.toBase58() ?? null : null}
             network={NETWORK}
             lines={[
-              { label: "SOL", value: sol.data != null ? formatLamports(sol.data) : "—" },
-              { label: "USDC", value: usdc.data != null ? formatUsdc(usdc.data) : "—" },
+              {
+                label: "SOL",
+                value: sol.data != null ? formatLamports(sol.data) : "—",
+              },
+              {
+                label: "USDC",
+                value: usdc.data != null ? formatUsdc(usdc.data) : "—",
+              },
             ]}
           />
           <BalanceCard
@@ -36,17 +52,45 @@ export default function WalletPage() {
             lines={[
               {
                 label: "Credits",
-                value: me.data ? formatUsdc(BigInt(me.data.credits_usdc)) : "—",
+                value: me.data
+                  ? formatUsdc(BigInt(me.data.credits_usdc))
+                  : "—",
               },
             ]}
             footer={
-              <div className="text-[11px] text-ink-500">
-                Deposit / withdraw will appear here once the execution-vault Anchor program is deployed and its IDL is available.
+              <div className="flex justify-end">
+                <Btn
+                  variant="primary"
+                  size="sm"
+                  disabled={!connected || !me.data?.wallet_address}
+                  onClick={() => setOpenDeposit(true)}
+                >
+                  Deposit credits
+                </Btn>
               </div>
             }
           />
         </div>
+        <div className="mt-4 flex justify-end">
+          <Btn
+            variant="default"
+            size="sm"
+            disabled={!connected}
+            onClick={() => setOpenWithdraw(true)}
+          >
+            Withdraw creator earnings
+          </Btn>
+        </div>
       </main>
+      {openDeposit && (
+        <DepositDialog
+          usdcBalance={usdc.data ?? 0n}
+          onClose={() => setOpenDeposit(false)}
+        />
+      )}
+      {openWithdraw && (
+        <WithdrawDialog onClose={() => setOpenWithdraw(false)} />
+      )}
     </>
   );
 }
