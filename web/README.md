@@ -1,36 +1,52 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Solhub Web
 
-## Getting Started
+Frontend for the SolHub (SolanaKeeper) Solana automation platform. Next.js 14 + TypeScript + Tailwind + TanStack Query.
 
-First, run the development server:
+## Run locally
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local
+pnpm install
+pnpm dev    # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The backend Rust API must be running on `http://localhost:8080` (or wherever `NEXT_PUBLIC_API_BASE_URL` points). Sign in via the `/login` route with an API key from the backend.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command | What it does |
+|---|---|
+| `pnpm dev` | Dev server on `:3000` (hot reload) |
+| `pnpm build` | Production build |
+| `pnpm start` | Serve the production build |
+| `pnpm lint` | `next lint` |
+| `pnpm typecheck` | `tsc --noEmit` |
+| `pnpm test` | Vitest suite (one-shot) |
+| `pnpm test:watch` | Vitest watch mode |
+| `pnpm format` | Prettier write |
 
-## Learn More
+## Layout
 
-To learn more about Next.js, take a look at the following resources:
+```
+src/
+├─ app/                     # App Router
+│  ├─ (auth)/login/         # Public — API-key sign-in
+│  └─ (app)/                # Authenticated shell (Sidebar + Topbar)
+├─ components/
+│  ├─ primitives/           # Btn, Pill, Kbd, Icon, SolhubLogo, SolanaMark
+│  └─ shell/                # Sidebar, Topbar, Breadcrumb
+└─ lib/
+   ├─ api/                  # Typed fetch client + Zod schemas per resource
+   ├─ auth/                 # useAuth + localStorage Bearer token
+   └─ utils/                # cn, format
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Phases
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+This frontend is built in five phases. See `docs/superpowers/plans/2026-05-11-solhub-phase-*.md` (repo-root) for the full per-phase task plan.
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Phase A** — Foundation (scaffold, theme, primitives, API client, auth gate)  ← **current**
+- **Phase B** — Read-only screens (login, dashboard, workflows list, runs, marketplace)
+- **Phase C** — Mutations + React Flow workflow builder
+- **Phase D** — Wallet adapter + Vault deposit via Anchor
+- **Phase E** — Marketplace detail, Settings, AI Builder, Versions
