@@ -19,7 +19,7 @@ describe("apiRequest", () => {
       text: async () => JSON.stringify({ ok: true }),
     } as Response);
     await apiRequest("/v1/ping", Ok);
-    const [, init] = F.mock.calls[0];
+    const [, init] = F.mock.calls[0]!;
     expect((init as RequestInit).headers).toMatchObject({ Authorization: "Bearer test-key" });
   });
 
@@ -30,7 +30,7 @@ describe("apiRequest", () => {
       text: async () => JSON.stringify({ ok: true }),
     } as Response);
     await apiRequest("/v1/hub", Ok, { anonymous: true });
-    const [, init] = F.mock.calls[0];
+    const [, init] = F.mock.calls[0]!;
     expect((init as RequestInit).headers).not.toHaveProperty("Authorization");
   });
 
@@ -40,7 +40,7 @@ describe("apiRequest", () => {
       text: async () => JSON.stringify({ ok: true }),
     } as Response);
     await apiRequest("/v1/runs", Ok, { query: { workflow_id: "abc", limit: 10 } });
-    const [url] = F.mock.calls[0];
+    const [url] = F.mock.calls[0]!;
     expect(String(url)).toContain("workflow_id=abc");
     expect(String(url)).toContain("limit=10");
   });
@@ -51,7 +51,7 @@ describe("apiRequest", () => {
       text: async () => JSON.stringify({ ok: true }),
     } as Response);
     await apiRequest("/v1/runs", Ok, { query: { workflow_id: undefined, status: null, limit: 10 } });
-    const [url] = F.mock.calls[0];
+    const [url] = F.mock.calls[0]!;
     const u = String(url);
     expect(u).not.toContain("workflow_id");
     expect(u).not.toContain("status");

@@ -5,7 +5,7 @@ import "@testing-library/jest-dom/vitest";
 // `localStorage` / `sessionStorage` from jsdom's window into the global scope
 // (because those keys already exist on the Node.js global). Override them here
 // so tests get jsdom's in-memory Storage, not Node's file-backed one.
-if (typeof globalThis.jsdom !== "undefined") {
+if (typeof (globalThis as typeof globalThis & { jsdom?: { window: Window } }).jsdom !== "undefined") {
   Object.defineProperty(globalThis, "localStorage", {
     value: (globalThis as typeof globalThis & { jsdom: { window: Window } }).jsdom.window.localStorage,
     writable: true,
