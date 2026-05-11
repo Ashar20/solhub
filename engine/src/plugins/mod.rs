@@ -16,7 +16,12 @@ pub mod drift;
 pub mod orca;
 pub mod raydium;
 pub mod notifications;
+pub mod solhub;
 pub mod test_plugin;
+pub mod llm;
+pub mod news;
+pub mod portfolio;
+pub mod fear_greed;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -123,7 +128,17 @@ impl PluginRegistry {
             notifications::telegram::TelegramPlugin::new(),
         ));
         reg.register(Arc::new(notifications::discord::DiscordPlugin::new()));
+        reg.register(Arc::new(llm::LlmPlugin::new()));
+        reg.register(Arc::new(news::NewsPlugin::new()));
+        reg.register(Arc::new(portfolio::PortfolioPlugin::new()));
+        reg.register(Arc::new(fear_greed::FearGreedPlugin::new()));
         reg
+    }
+
+    /// Register the `solhub` platform plugin which requires a live DB handle.
+    /// Call this after constructing the registry whenever the DB is available.
+    pub fn register_solhub(&mut self, db: db::Db) {
+        self.register(Arc::new(solhub::SolhubPlugin::new(db)));
     }
 }
 

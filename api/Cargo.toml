@@ -35,6 +35,10 @@ async-stream = "0.3"
 futures-util = "0.3"
 tokio-stream = "0.1"
 constant_time_eq = "0.3"
+solana-client = { workspace = true }
+solana-sdk = { workspace = true }
+solana-transaction-status-client-types = "2"
+bincode = { workspace = true }
 db = { path = "../db" }
 engine = { path = "../engine" }
 

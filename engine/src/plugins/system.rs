@@ -78,6 +78,32 @@ impl SolanaKeeperPlugin for SystemPlugin {
                 }),
                 returns_schema: json!({"lamports": "integer", "sol": "number"}),
             },
+            ActionDefinition {
+                id: "batch_transfer".to_string(),
+                name: "Batch SOL Transfer".to_string(),
+                description: "Atomically transfer SOL to multiple recipients in one transaction".to_string(),
+                action_type: ActionType::Transaction,
+                params_schema: json!({
+                    "type": "object",
+                    "required": ["transfers"],
+                    "properties": {
+                        "transfers": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "required": ["to", "lamports"],
+                                "properties": {
+                                    "to": {"type": "string"},
+                                    "lamports": {"type": "integer"}
+                                }
+                            },
+                            "minItems": 1,
+                            "maxItems": 15
+                        }
+                    }
+                }),
+                returns_schema: json!({"signature": "string"}),
+            },
         ]
     }
 
@@ -136,6 +162,48 @@ impl SolanaKeeperPlugin for SystemPlugin {
                 };
                 Ok(vec![tx])
             }
+            "batch_transfer" => {
+                let transfers = params["transfers"]
+                    .as_array()
+                    .ok_or_else(|| PluginError::InvalidParam("transfers".into()))?;
+
+                if transfers.is_empty() {
+                    return Err(PluginError::InvalidParam(
+                        "transfers: must have at least 1 entry".into(),
+                    ));
+                }
+                if transfers.len() > 15 {
+                    return Err(PluginError::InvalidParam(
+                        "transfers: exceeds max of 15 entries".into(),
+                    ));
+                }
+
+                let mut ixs = Vec::with_capacity(transfers.len());
+                for (idx, t) in transfers.iter().enumerate() {
+                    let to = t["to"].as_str().ok_or_else(|| {
+                        PluginError::InvalidParam(format!("transfers[{idx}].to"))
+                    })?;
+                    let lamports = t["lamports"].as_u64().ok_or_else(|| {
+                        PluginError::InvalidParam(format!("transfers[{idx}].lamports"))
+                    })?;
+                    let to_pk = Pubkey::from_str(to).map_err(|_| {
+                        PluginError::InvalidParam(format!("transfers[{idx}].to: not a pubkey"))
+                    })?;
+                    ixs.push(system_instruction::transfer(wallet_pubkey, &to_pk, lamports));
+                }
+
+                let recent = rpc
+                    .get_latest_blockhash()
+                    .await
+                    .map_err(|e| PluginError::Network(e.to_string()))?;
+                let msg = v0::Message::try_compile(wallet_pubkey, &ixs, &[], recent)
+                    .map_err(|e| PluginError::Other(format!("message compile: {e}")))?;
+                let tx = VersionedTransaction {
+                    signatures: vec![solana_sdk::signature::Signature::default()],
+                    message: VersionedMessage::V0(msg),
+                };
+                Ok(vec![tx])
+            }
             _ => Err(PluginError::UnknownAction(action.to_string())),
         }
     }
@@ -176,15 +244,16 @@ mod tests {
     }
 
     #[test]
-    fn actions_has_transfer_memo_get_balance() {
+    fn actions_has_transfer_memo_get_balance_batch_transfer() {
         let p = SystemPlugin::new();
         let actions = p.actions();
-        assert_eq!(actions.len(), 3);
+        assert_eq!(actions.len(), 4);
 
         let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
         assert!(ids.contains(&"transfer"));
         assert!(ids.contains(&"memo"));
         assert!(ids.contains(&"get_balance"));
+        assert!(ids.contains(&"batch_transfer"));
     }
 
     #[test]
@@ -257,5 +326,63 @@ mod tests {
 
         let err = p.read("get_balance", &json!({}), &rpc).await.unwrap_err();
         assert!(matches!(err, PluginError::InvalidParam(ref s) if s == "account"));
+    }
+
+    #[test]
+    fn batch_transfer_action_appears_in_actions_list() {
+        let p = SystemPlugin::new();
+        let actions = p.actions();
+
+        let bt = actions.iter().find(|a| a.id == "batch_transfer");
+        assert!(bt.is_some(), "batch_transfer must be in actions list");
+
+        let bt = bt.unwrap();
+        assert_eq!(bt.action_type, ActionType::Transaction);
+
+        let required = bt.params_schema["required"].as_array().unwrap();
+        assert!(required.iter().any(|v| v == "transfers"), "'transfers' must be required");
+
+        let transfers_schema = &bt.params_schema["properties"]["transfers"];
+        assert_eq!(transfers_schema["minItems"], 1);
+        assert_eq!(transfers_schema["maxItems"], 15);
+    }
+
+    #[tokio::test]
+    async fn batch_transfer_rejects_empty_array() {
+        let p = SystemPlugin::new();
+        let wallet = Pubkey::new_unique();
+        let rpc = RpcClient::new("https://api.devnet.solana.com".to_string());
+        let params = json!({"transfers": []});
+
+        let err = p
+            .build_transactions("batch_transfer", &params, &wallet, &rpc)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, PluginError::InvalidParam(_)),
+            "expected InvalidParam, got: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn batch_transfer_rejects_more_than_15() {
+        let p = SystemPlugin::new();
+        let wallet = Pubkey::new_unique();
+        let rpc = RpcClient::new("https://api.devnet.solana.com".to_string());
+
+        let recipient = Pubkey::new_unique().to_string();
+        let transfers: Vec<serde_json::Value> = (0..16)
+            .map(|_| json!({"to": recipient, "lamports": 1000u64}))
+            .collect();
+        let params = json!({"transfers": transfers});
+
+        let err = p
+            .build_transactions("batch_transfer", &params, &wallet, &rpc)
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, PluginError::InvalidParam(_)),
+            "expected InvalidParam, got: {err}"
+        );
     }
 }

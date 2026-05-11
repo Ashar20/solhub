@@ -1,4 +1,5 @@
 pub mod analytics;
+pub mod credits;
 pub mod execute;
 pub mod hub;
 pub mod orgs;

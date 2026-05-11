@@ -12,8 +12,7 @@ coverage/
 *.swp
 .DS_Store
 solhub-dev.json
-solhub-dev.db*
-solhub-e2e*.db*
+solhub-*.db*
 solhub.zip
 CLAUDE.md
 .agents/

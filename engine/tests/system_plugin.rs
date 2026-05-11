@@ -1,13 +1,13 @@
 use engine::plugins::{system::SystemPlugin, ActionType, SolanaKeeperPlugin};
 
 #[test]
-fn system_plugin_has_three_actions() {
+fn system_plugin_has_four_actions() {
     let p = SystemPlugin::new();
     let actions = p.actions();
     assert_eq!(
         actions.len(),
-        3,
-        "expected 3 actions (transfer, memo, get_balance), got: {:?}",
+        4,
+        "expected 4 actions (transfer, memo, get_balance, batch_transfer), got: {:?}",
         actions.iter().map(|a| &a.id).collect::<Vec<_>>()
     );
 }
@@ -19,6 +19,7 @@ fn system_plugin_action_ids_are_correct() {
     assert!(ids.contains(&"transfer".to_string()), "missing 'transfer'");
     assert!(ids.contains(&"memo".to_string()), "missing 'memo'");
     assert!(ids.contains(&"get_balance".to_string()), "missing 'get_balance'");
+    assert!(ids.contains(&"batch_transfer".to_string()), "missing 'batch_transfer'");
 }
 
 #[test]
@@ -26,7 +27,7 @@ fn transfer_and_memo_are_transaction_actions() {
     let p = SystemPlugin::new();
     for action in p.actions() {
         match action.id.as_str() {
-            "transfer" | "memo" => {
+            "transfer" | "memo" | "batch_transfer" => {
                 assert_eq!(
                     action.action_type,
                     ActionType::Transaction,

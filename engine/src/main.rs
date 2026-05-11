@@ -21,7 +21,9 @@ async fn main() -> anyhow::Result<()> {
     let db = db::Db::connect(&database_url).await?;
     db.migrate().await?;
 
-    let plugins = Arc::new(PluginRegistry::default());
+    let mut plugins_registry = PluginRegistry::default();
+    plugins_registry.register_solhub(db.clone());
+    let plugins = Arc::new(plugins_registry);
 
     // When SOLANA_RPC_URL is set, use real RPC + real keypair from disk.
     // Otherwise fall back to mock implementations for local development.

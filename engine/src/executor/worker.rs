@@ -14,7 +14,7 @@ pub struct ExecutorWorker {
 }
 
 impl ExecutorWorker {
-    /// Drive a single run from `Pending` through to `Confirmed` (or `Failed`).
+    /// Drive a single run from `Pending` (or `Resumed`) through to `Confirmed` (or `Failed`).
     pub async fn execute_run(&self, run_id: Uuid) -> anyhow::Result<()> {
         let run = self
             .db
@@ -27,6 +27,12 @@ impl ExecutorWorker {
             .get_workflow(run.workflow_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("workflow not found: {}", run.workflow_id))?;
+
+        // Determine resume offset. If a previous run paused at an approval gate,
+        // `resume_from_step_index` is set; pick up there. (The scheduler may have
+        // flipped status from Resumed → Triggered already, so don't rely on
+        // status alone.)
+        let start_index = run.resume_from_step_index.unwrap_or(0) as usize;
 
         self.db
             .update_run_status(run_id, "Triggered", None)
@@ -46,7 +52,7 @@ impl ExecutorWorker {
             .update_run_status(run_id, "Simulating", None)
             .await?;
 
-        for (i, step) in steps.iter().enumerate() {
+        for (i, step) in steps.iter().enumerate().skip(start_index) {
             let plugin_id = step["plugin"].as_str().unwrap_or("");
             let action = step["action"].as_str().unwrap_or("");
             let params = &step["params"];
@@ -78,7 +84,32 @@ impl ExecutorWorker {
             let out: Value = match action_type {
                 Some(ActionType::ReadOnly) => {
                     match plugin.read(action, params, &rpc).await {
-                        Ok(v) => v,
+                        Ok(v) => {
+                            // Check for the approval-gate pause sentinel.
+                            if v.get("__pause__").and_then(|p| p.as_bool()).unwrap_or(false) {
+                                // Record the current step in the log before pausing.
+                                self.db
+                                    .append_step_log(
+                                        run_id,
+                                        json!({
+                                            "step_id": step.get("id").cloned()
+                                                .unwrap_or_else(|| json!(format!("step_{}", i))),
+                                            "status": "WaitingApproval",
+                                            "input":  params.clone(),
+                                            "output": v.clone(),
+                                            "duration_ms": started.elapsed().as_millis() as u64,
+                                        }),
+                                    )
+                                    .await?;
+                                // Store the next-step index so the executor can resume there.
+                                self.db.set_resume_index(run_id, (i + 1) as i64).await?;
+                                self.db
+                                    .update_run_status(run_id, "WaitingApproval", None)
+                                    .await?;
+                                return Ok(());
+                            }
+                            v
+                        }
                         Err(e) => {
                             let msg = e.to_string();
                             self.append_step_failure(

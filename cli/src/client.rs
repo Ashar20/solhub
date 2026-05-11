@@ -82,6 +82,31 @@ impl ApiClient {
         Ok(r.json().await?)
     }
 
+    /// POST with an extra custom header, returning deserialized JSON.
+    pub async fn post_with_header<B: Serialize, T: DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &B,
+        header_name: &str,
+        header_value: &str,
+    ) -> Result<T> {
+        let r = self
+            .req(Method::POST, path)
+            .json(body)
+            .header(header_name, header_value)
+            .send()
+            .await?;
+        if !r.status().is_success() {
+            return Err(anyhow!(
+                "POST {} -> {}: {}",
+                path,
+                r.status(),
+                r.text().await.unwrap_or_default()
+            ));
+        }
+        Ok(r.json().await?)
+    }
+
     pub async fn delete(&self, path: &str) -> Result<()> {
         let r = self.req(Method::DELETE, path).send().await?;
         if !r.status().is_success() {

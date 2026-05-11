@@ -2,7 +2,7 @@ use axum::{
     extract::{Extension, Path, Query, State},
     Json,
 };
-use db::{NewRun, NewWorkflow, Organization};
+use db::{DbError, NewRun, NewWorkflow, Organization};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -164,6 +164,23 @@ pub async fn trigger(
             triggered_by: "manual".into(),
         })
         .await?;
+
+    // Debit 1 credit; if insufficient mark run Skipped and return 402.
+    match state.db.debit_credit_for_run(org.id, run.run_id).await {
+        Ok(_) => {}
+        Err(DbError::InsufficientCredits) => {
+            let _ = state
+                .db
+                .update_run_status(run.run_id, "Skipped", Some("insufficient credits"))
+                .await;
+            let topup_url = "/v1/orgs/me/credits/topup_info".to_string();
+            return Err(AppError::PaymentRequired(json!({
+                "error": "insufficient_credits",
+                "topup": topup_url,
+            })));
+        }
+        Err(e) => return Err(AppError::Db(e)),
+    }
 
     // Notify downstream engine listeners — ignore send errors (no receivers yet)
     let _ = state.manual_triggers.send(run.run_id);

@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, State},
     Json,
 };
-use db::NewRun;
+use db::{DbError, NewRun};
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use uuid::Uuid;
@@ -54,14 +54,31 @@ pub async fn receive_webhook(
         return Err(AppError::InvalidSignature);
     }
 
+    let org_id = wf.org_id;
     let run = state
         .db
         .create_run(NewRun {
             workflow_id,
-            org_id: wf.org_id,
+            org_id,
             triggered_by: "webhook".into(),
         })
         .await?;
+
+    // Debit 1 credit; insufficient → mark run Skipped (for audit), still return run info.
+    match state.db.debit_credit_for_run(org_id, run.run_id).await {
+        Ok(_) => {}
+        Err(DbError::InsufficientCredits) => {
+            let _ = state
+                .db
+                .update_run_status(run.run_id, "Skipped", Some("insufficient credits"))
+                .await;
+            return Ok(Json(WebhookResponse {
+                run_id: run.run_id,
+                status: "Skipped".into(),
+            }));
+        }
+        Err(e) => return Err(AppError::Db(e)),
+    }
 
     Ok(Json(WebhookResponse {
         run_id: run.run_id,

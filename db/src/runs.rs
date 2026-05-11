@@ -50,7 +50,7 @@ impl Db {
         let rows = sqlx::query(
             "SELECT run_id, workflow_id, org_id, status, triggered_by,
                     steps_log, slot, signature, fee_lamports, jito_tip_lamports,
-                    error_message, started_at, completed_at
+                    error_message, started_at, completed_at, resume_from_step_index
              FROM workflow_runs
              WHERE org_id = ?1
                AND (?2 IS NULL OR workflow_id = ?2)
@@ -66,6 +66,48 @@ impl Db {
         .await?;
 
         rows.iter().map(row_to_run).collect()
+    }
+
+    /// Returns run_ids for runs that are Pending or Resumed, ordered oldest-first.
+    pub async fn list_runs_to_execute(&self, limit: i64) -> Result<Vec<Uuid>, DbError> {
+        let rows: Vec<(String,)> = sqlx::query_as(
+            "SELECT run_id FROM workflow_runs
+             WHERE status IN ('Pending', 'Resumed')
+             ORDER BY started_at ASC LIMIT ?1",
+        )
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|(s,)| uuid::Uuid::parse_str(&s).map_err(DbError::Uuid))
+            .collect()
+    }
+
+    /// Persist the index at which the executor should resume (next step after pause).
+    pub async fn set_resume_index(&self, run_id: Uuid, idx: i64) -> Result<(), DbError> {
+        let run_id_str = run_id.to_string();
+        sqlx::query(
+            "UPDATE workflow_runs SET resume_from_step_index = ?1 WHERE run_id = ?2",
+        )
+        .bind(idx)
+        .bind(&run_id_str)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Read the stored resume index (returns 0 if NULL).
+    pub async fn get_resume_index(&self, run_id: Uuid) -> Result<i64, DbError> {
+        let run_id_str = run_id.to_string();
+        let val: Option<i64> = sqlx::query_scalar(
+            "SELECT resume_from_step_index FROM workflow_runs WHERE run_id = ?1",
+        )
+        .bind(&run_id_str)
+        .fetch_optional(&self.pool)
+        .await?
+        .flatten();
+        Ok(val.unwrap_or(0))
     }
 
     pub async fn update_run_status(
@@ -167,6 +209,37 @@ impl Db {
             .collect()
     }
 
+    /// Update WaitingApproval → Resumed (approval path) and stamp completed_at
+    /// for terminal states. `WaitingApproval` is treated as non-terminal by
+    /// `update_run_status`; this helper is the canonical approve/reject path.
+    pub async fn approve_run(&self, run_id: Uuid) -> Result<WorkflowRun, DbError> {
+        let run_id_str = run_id.to_string();
+        sqlx::query(
+            "UPDATE workflow_runs SET status = 'Resumed' WHERE run_id = ?1 AND status = 'WaitingApproval'",
+        )
+        .bind(&run_id_str)
+        .execute(&self.pool)
+        .await?;
+        self.get_run_required(&run_id_str).await
+    }
+
+    pub async fn reject_run(&self, run_id: Uuid, reason: &str) -> Result<WorkflowRun, DbError> {
+        let run_id_str = run_id.to_string();
+        let now = crate::models::now_ts();
+        let msg = format!("rejected: {}", reason);
+        sqlx::query(
+            "UPDATE workflow_runs
+             SET status = 'Failed', error_message = ?1, completed_at = ?2
+             WHERE run_id = ?3 AND status = 'WaitingApproval'",
+        )
+        .bind(&msg)
+        .bind(now)
+        .bind(&run_id_str)
+        .execute(&self.pool)
+        .await?;
+        self.get_run_required(&run_id_str).await
+    }
+
     // -----------------------------------------------------------------------
     // Private helpers
     // -----------------------------------------------------------------------
@@ -175,7 +248,7 @@ impl Db {
         let row = sqlx::query(
             "SELECT run_id, workflow_id, org_id, status, triggered_by,
                     steps_log, slot, signature, fee_lamports, jito_tip_lamports,
-                    error_message, started_at, completed_at
+                    error_message, started_at, completed_at, resume_from_step_index
              FROM workflow_runs WHERE run_id = ?1",
         )
         .bind(run_id_str)
@@ -216,5 +289,6 @@ fn row_to_run(r: &sqlx::sqlite::SqliteRow) -> Result<WorkflowRun, DbError> {
         error_message: r.try_get("error_message")?,
         started_at: ts_to_dt(r.try_get("started_at")?),
         completed_at: r.try_get::<Option<i64>, _>("completed_at")?.map(ts_to_dt),
+        resume_from_step_index: r.try_get("resume_from_step_index")?,
     })
 }

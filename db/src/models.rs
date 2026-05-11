@@ -73,6 +73,7 @@ pub struct WorkflowRun {
     pub error_message: Option<String>,
     pub started_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
+    pub resume_from_step_index: Option<i64>,
 }
 
 // ---------------------------------------------------------------------------

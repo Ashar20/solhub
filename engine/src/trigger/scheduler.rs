@@ -24,7 +24,7 @@ impl Scheduler {
         loop {
             tokio::select! {
                 _ = tick.tick() => {
-                    match self.db.list_pending_run_ids(50).await {
+                    match self.db.list_runs_to_execute(50).await {
                         Ok(pending) => {
                             for run_id in pending {
                                 // Mark as Triggered so the next poll doesn't

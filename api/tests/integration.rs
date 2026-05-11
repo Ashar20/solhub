@@ -18,13 +18,24 @@ async fn fixture() -> (axum::Router, db::Db, db::Organization, String) {
         .create_org("acme", Some("11111111111111111111111111111111"))
         .await
         .unwrap();
+    // Pre-grant 1000 credits so trigger tests pass without payment setup.
+    db.grant_credits(org.id, 1000, "test_fixture", None)
+        .await
+        .unwrap();
     let raw_key = format!("sk_{}", Uuid::new_v4().simple());
     let mut h = Sha256::new();
     h.update(raw_key.as_bytes());
     let kh = hex::encode(h.finalize());
     db.create_api_key(org.id, &kh, Some("test")).await.unwrap();
     let plugins = std::sync::Arc::new(engine::plugins::PluginRegistry::default());
-    let state = api::state::AppState::new(db.clone(), plugins);
+    let rpc = std::sync::Arc::new(
+        solana_client::nonblocking::rpc_client::RpcClient::new(
+            "https://api.devnet.solana.com".to_string(),
+        ),
+    );
+    let payment_verifier = api::payment::PaymentVerifier::new(rpc);
+    let treasury = "FPRYNqc3vGqNsAmpj7xuCDWZDZ3ZWGiB45oD3rhrc6Nb".to_string();
+    let state = api::state::AppState::new(db.clone(), plugins, payment_verifier, treasury);
     let app = api::app::build_router(state);
     (app, db, org, raw_key)
 }

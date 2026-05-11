@@ -35,7 +35,7 @@ impl CronTriggers {
             let job = Job::new_async(schedule.as_str(), move |_uuid, _l| {
                 let db = db.clone();
                 Box::pin(async move {
-                    if let Err(e) = db
+                    let run = match db
                         .create_run(NewRun {
                             workflow_id: wf_id,
                             org_id,
@@ -43,11 +43,26 @@ impl CronTriggers {
                         })
                         .await
                     {
-                        tracing::error!(
+                        Ok(r) => r,
+                        Err(e) => {
+                            tracing::error!(
+                                %wf_id,
+                                error = %e,
+                                "cron: failed to create run"
+                            );
+                            return;
+                        }
+                    };
+                    if let Err(e) = db.debit_credit_for_run(org_id, run.run_id).await {
+                        tracing::warn!(
                             %wf_id,
+                            run_id = %run.run_id,
                             error = %e,
-                            "cron: failed to create run"
+                            "cron: insufficient credits, skipping run"
                         );
+                        let _ = db
+                            .update_run_status(run.run_id, "Skipped", Some("insufficient credits"))
+                            .await;
                     }
                 })
             })?;

@@ -368,6 +368,7 @@ dependencies = [
  "async-stream",
  "axum",
  "base64 0.22.1",
+ "bincode",
  "chrono",
  "constant_time_eq 0.3.1",
  "db",
@@ -381,6 +382,9 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "solana-client",
+ "solana-sdk",
+ "solana-transaction-status-client-types",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
@@ -1754,12 +1758,14 @@ dependencies = [
  "mockito",
  "pretty_assertions",
  "pyth-sdk-solana",
+ "quick-xml",
  "reqwest",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "solana-client",
  "solana-sdk",
+ "spl-token",
  "thiserror 2.0.18",
  "tokio",
  "tokio-cron-scheduler",
@@ -3593,6 +3599,15 @@ dependencies = [
  "wasi 0.11.1+wasi-snapshot-preview1",
  "web-sys",
  "winapi",
+]
+
+[[package]]
+name = "quick-xml"
+version = "0.36.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7649a7b4df05aed9ea7ec6f628c67c9953a43869b8bc50929569b2999d443fe"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]

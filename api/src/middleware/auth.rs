@@ -25,6 +25,10 @@ pub async fn auth_middleware(
     if path == "/v1/hub" && method == axum::http::Method::GET {
         return Ok(next.run(req).await);
     }
+    // payment_info is public so clients can discover fees without a key
+    if path.ends_with("/payment_info") && method == axum::http::Method::GET {
+        return Ok(next.run(req).await);
+    }
     if path == "/health" {
         return Ok(next.run(req).await);
     }

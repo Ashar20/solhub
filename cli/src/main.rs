@@ -25,6 +25,8 @@ enum Cmd {
     Billing(commands::billing::BillingCmd),
     /// CLI configuration
     Config(commands::config_cmd::ConfigCmd),
+    /// x402 payment-gated workflow calls
+    X402(commands::x402::X402PayArgs),
 }
 
 #[tokio::main]
@@ -40,5 +42,6 @@ async fn main() -> anyhow::Result<()> {
         Cmd::Execute(c) => commands::execute::run(c).await,
         Cmd::Billing(c) => commands::billing::run(c).await,
         Cmd::Config(c) => commands::config_cmd::run(c).await,
+        Cmd::X402(c) => commands::x402::run(c).await,
     }
 }

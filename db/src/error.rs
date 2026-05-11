@@ -16,4 +16,10 @@ pub enum DbError {
 
     #[error("not found")]
     NotFound,
+
+    #[error("insufficient credits")]
+    InsufficientCredits,
+
+    #[error("{0}")]
+    Other(String),
 }

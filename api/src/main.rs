@@ -1,6 +1,13 @@
 use std::sync::Arc;
 
-use api::{app::build_router, state::AppState};
+use api::{app::build_router, payment::PaymentVerifier, state::AppState};
+use solana_client::nonblocking::rpc_client::RpcClient;
+
+/// Default treasury pubkey — matches the deployer in deployments/devnet.json.
+const DEFAULT_TREASURY: &str = "FPRYNqc3vGqNsAmpj7xuCDWZDZ3ZWGiB45oD3rhrc6Nb";
+
+/// Default Solana devnet RPC.
+const DEFAULT_RPC: &str = "https://api.devnet.solana.com";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -15,10 +22,25 @@ async fn main() -> anyhow::Result<()> {
         .and_then(|s| s.parse().ok())
         .unwrap_or(8080);
 
+    // Treasury: prefer SOLHUB_TREASURY env var; fall back to hard-coded devnet deployer.
+    let treasury_pubkey =
+        std::env::var("SOLHUB_TREASURY").unwrap_or_else(|_| DEFAULT_TREASURY.to_string());
+
+    // RPC URL for payment verification.
+    let rpc_url =
+        std::env::var("SOLANA_RPC_URL").unwrap_or_else(|_| DEFAULT_RPC.to_string());
+
     let db = db::Db::connect(&database_url).await?;
     db.migrate().await?;
-    let plugins = Arc::new(engine::plugins::PluginRegistry::default());
-    let state = AppState::new(db, plugins);
+
+    let mut plugins_registry = engine::plugins::PluginRegistry::default();
+    plugins_registry.register_solhub(db.clone());
+    let plugins = Arc::new(plugins_registry);
+
+    let rpc = Arc::new(RpcClient::new(rpc_url));
+    let payment_verifier = PaymentVerifier::new(rpc);
+
+    let state = AppState::new(db, plugins, payment_verifier, treasury_pubkey);
     let app = build_router(state);
 
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));

@@ -5,6 +5,7 @@ use axum::{
 };
 use db::Organization;
 use futures_util::stream::Stream;
+use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -13,6 +14,11 @@ use crate::{
     state::AppState,
     types::ListRunsQuery,
 };
+
+#[derive(Debug, Deserialize)]
+pub struct RejectBody {
+    pub reason: Option<String>,
+}
 
 pub async fn list(
     State(state): State<AppState>,
@@ -43,6 +49,60 @@ pub async fn get_one(
     }
 
     Ok(Json(json!(run)))
+}
+
+pub async fn approve_run(
+    State(state): State<AppState>,
+    Extension(org): Extension<Organization>,
+    Path(run_id): Path<Uuid>,
+) -> AppResult<Json<Value>> {
+    let run = state
+        .db
+        .get_run(run_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    if run.org_id != org.id {
+        return Err(AppError::NotFound);
+    }
+
+    if run.status != "WaitingApproval" {
+        return Err(AppError::BadRequest(format!(
+            "run is in status '{}', not 'WaitingApproval'",
+            run.status
+        )));
+    }
+
+    let updated = state.db.approve_run(run_id).await?;
+    Ok(Json(json!(updated)))
+}
+
+pub async fn reject_run(
+    State(state): State<AppState>,
+    Extension(org): Extension<Organization>,
+    Path(run_id): Path<Uuid>,
+    Json(body): Json<RejectBody>,
+) -> AppResult<Json<Value>> {
+    let run = state
+        .db
+        .get_run(run_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    if run.org_id != org.id {
+        return Err(AppError::NotFound);
+    }
+
+    if run.status != "WaitingApproval" {
+        return Err(AppError::BadRequest(format!(
+            "run is in status '{}', not 'WaitingApproval'",
+            run.status
+        )));
+    }
+
+    let reason = body.reason.as_deref().unwrap_or("no reason provided");
+    let updated = state.db.reject_run(run_id, reason).await?;
+    Ok(Json(json!(updated)))
 }
 
 pub async fn stream_run_logs(

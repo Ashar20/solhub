@@ -38,8 +38,10 @@ hex = { workspace = true }
 base64 = { workspace = true }
 envy = "0.4"
 pyth-sdk-solana = "0.10"
+spl-token = "7"
 db = { path = "../db" }
 tokio-cron-scheduler = "0.13"
+quick-xml = "0.36"
 
 [dev-dependencies]
 mockito = "1"

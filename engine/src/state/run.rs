@@ -18,10 +18,13 @@ pub enum RunStatus {
     Simulating,
     Bundling,
     Submitted,
+    WaitingApproval,
     Confirmed,
     Retrying,
     Failed,
     Skipped,
+    /// Transient state set by the approve endpoint; treated like Pending by the executor.
+    Resumed,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -70,12 +73,14 @@ impl WorkflowRun {
     pub fn transition_to(&mut self, new: RunStatus) -> Result<(), TransitionError> {
         use RunStatus::*;
         let allowed: &[RunStatus] = match self.status {
-            Pending => &[Triggered, Failed],
-            Triggered => &[Simulating, Failed, Skipped],
-            Simulating => &[Bundling, Failed],
-            Bundling => &[Submitted, Failed],
-            Submitted => &[Confirmed, Retrying, Failed],
+            Pending => &[Triggered, WaitingApproval, Failed],
+            Triggered => &[Simulating, WaitingApproval, Failed, Skipped],
+            Simulating => &[Bundling, WaitingApproval, Failed],
+            Bundling => &[Submitted, WaitingApproval, Failed],
+            Submitted => &[Confirmed, WaitingApproval, Retrying, Failed],
+            WaitingApproval => &[Resumed, Failed, Skipped],
             Retrying => &[Submitted, Failed],
+            Resumed => &[Triggered, Failed],
             Confirmed => &[],
             Failed => &[],
             Skipped => &[],
@@ -176,5 +181,40 @@ mod tests {
         run.transition_to(RunStatus::Submitted).unwrap();
         run.transition_to(RunStatus::Confirmed).unwrap();
         assert!(run.completed_at.is_some());
+    }
+
+    #[test]
+    fn pending_to_waiting_approval_ok() {
+        let mut run = make_run();
+        run.transition_to(RunStatus::WaitingApproval).unwrap();
+        assert_eq!(run.status, RunStatus::WaitingApproval);
+        // WaitingApproval is not terminal — completed_at must remain None.
+        assert!(run.completed_at.is_none());
+    }
+
+    #[test]
+    fn waiting_approval_to_resumed_ok() {
+        let mut run = make_run();
+        run.transition_to(RunStatus::WaitingApproval).unwrap();
+        run.transition_to(RunStatus::Resumed).unwrap();
+        assert_eq!(run.status, RunStatus::Resumed);
+    }
+
+    #[test]
+    fn waiting_approval_to_failed_ok() {
+        let mut run = make_run();
+        run.transition_to(RunStatus::WaitingApproval).unwrap();
+        run.transition_to(RunStatus::Failed).unwrap();
+        assert_eq!(run.status, RunStatus::Failed);
+        assert!(run.completed_at.is_some());
+    }
+
+    #[test]
+    fn resumed_to_triggered_ok() {
+        let mut run = make_run();
+        run.transition_to(RunStatus::WaitingApproval).unwrap();
+        run.transition_to(RunStatus::Resumed).unwrap();
+        run.transition_to(RunStatus::Triggered).unwrap();
+        assert_eq!(run.status, RunStatus::Triggered);
     }
 }
