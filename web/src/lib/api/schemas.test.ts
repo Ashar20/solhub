@@ -176,7 +176,8 @@ describe("WorkflowSchema", () => {
   });
 
   it("defaults execution_count to 0 when absent", () => {
-    const { execution_count: _, ...rest } = minimalWorkflow;
+    const { execution_count: _omit, ...rest } = minimalWorkflow;
+    void _omit;
     const w = WorkflowSchema.parse(rest);
     expect(w.execution_count).toBe(0);
   });
@@ -285,7 +286,8 @@ describe("WorkflowRunSchema", () => {
   });
 
   it("defaults steps_log to empty array when absent", () => {
-    const { steps_log: _, ...rest } = minimalRun;
+    const { steps_log: _omit, ...rest } = minimalRun;
+    void _omit;
     const r = WorkflowRunSchema.parse(rest);
     expect(r.steps_log).toEqual([]);
   });
