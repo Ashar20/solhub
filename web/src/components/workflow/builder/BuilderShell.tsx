@@ -2,10 +2,12 @@
 import { useEffect, useState } from "react";
 import type { Node, Edge } from "reactflow";
 import { useWorkflow } from "@/lib/hooks/use-workflows";
+import { findAction } from "@/lib/plugins/registry";
 import { Btn } from "@/components/primitives/Btn";
 import { Pill } from "@/components/primitives/Pill";
 import { SolhubLogo } from "@/components/primitives/SolhubLogo";
 import { Canvas } from "./Canvas";
+import { ToolPalette } from "./ToolPalette";
 import type { StepNodeData } from "./StepNode";
 
 export interface BuilderShellProps { id: string }
@@ -40,6 +42,9 @@ export function BuilderShell({ id }: BuilderShellProps) {
   const [nodes, setNodes] = useState<Node<StepNodeData>[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // params is read by Task 8 (Inspector); maintain here so addStep can seed defaults
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [params, setParams] = useState<Record<string, Record<string, unknown>>>({});
 
   useEffect(() => { if (data?.name) setName(data.name); }, [data?.name]);
 
@@ -50,6 +55,21 @@ export function BuilderShell({ id }: BuilderShellProps) {
     setNodes(g.nodes);
     setEdges(g.edges);
   }, [data?.steps]);
+
+  function addStep(plugin: string, action: string) {
+    const id = `step_${Math.random().toString(36).slice(2, 8)}`;
+    const found = findAction(plugin, action);
+    setNodes((prev) => [
+      ...prev,
+      {
+        id,
+        type: "step",
+        position: { x: 80 + prev.length * 240, y: 160 },
+        data: { label: `${plugin}.${action}`, plugin, action },
+      },
+    ]);
+    setParams((p) => ({ ...p, [id]: { ...(found?.action.defaults ?? {}) } }));
+  }
 
   return (
     <div className="h-screen flex flex-col">
@@ -73,8 +93,8 @@ export function BuilderShell({ id }: BuilderShellProps) {
         </div>
       </header>
       <div className="flex-1 grid grid-cols-[240px_1fr_320px] overflow-hidden">
-        <aside className="border-r border-ink-200 bg-white flex items-center justify-center text-[11px] text-ink-400 font-mono">
-          tool palette (Task 7)
+        <aside className="border-r border-ink-200 bg-white">
+          <ToolPalette onAdd={addStep} />
         </aside>
         <main className="bg-ink-50">
           <Canvas
@@ -83,8 +103,6 @@ export function BuilderShell({ id }: BuilderShellProps) {
             initialEdges={edges}
             onSelect={setSelectedId}
           />
-          {/* setNodes/setEdges unused for now — Task 7+ will use them when adding nodes from palette */}
-          {null /* setNodes, setEdges reserved for Task 7+ */}
         </main>
         <aside className="border-l border-ink-200 bg-white overflow-y-auto">
           <div className="p-3 text-[11px] font-mono text-ink-500">
