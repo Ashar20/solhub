@@ -1,0 +1,26 @@
+{
+  "cluster": "devnet",
+  "rpc": "https://api.devnet.solana.com",
+  "deployer": "FPRYNqc3vGqNsAmpj7xuCDWZDZ3ZWGiB45oD3rhrc6Nb",
+  "programs": {
+    "workflow_registry": "Eemnq9Fv55B2TNi5zKNSQyQDd6CKFBUJMfcgtJUiJuFB",
+    "execution_vault": "4CFgDzuLnfdTThgNXTknhXyshzsidDQFtNCxsoMnBHJn",
+    "condition_oracle": "JwYqHkFc9w3bwZuK87FEE2jviVsVCDkp7RdBXQGey7h"
+  },
+  "program_data": {
+    "workflow_registry": "EZqGBwgawCuxBHdN4gtFzjJdA7pVF8EYK8n5hKyLTNqQ",
+    "execution_vault": "BoBwvDakvAau2asRtR1sNuYzJfbzqdRiHFUVTSZKoX9c",
+    "condition_oracle": "4sEW3kGjVgAJ95n2KFpkEzCMfeJ6nrLR3DfrqzDMNnqw"
+  },
+  "deploy_signatures": {
+    "workflow_registry": "6c14eho1dwnEZGmCDJvwMq6yvrmWYF6qcrGX2jGW6LyuYZ9g7CwYy1spzvuWvx4BoHqGKeqp6B5aVaF2ttNVpRd",
+    "execution_vault": "3Byv8C6qFs8bX3Ux6DQj6w4ouiKPSauUKEPT2UcrhAwezmhHCzBzhfw7KWpLVwGdHVncwDvVjgU25pRaoAgRCQ5L",
+    "condition_oracle": "fac7gZXK1hNg67gGE6isQaxge6c3DTzgZiJ7cX9coC4pBMQiqnEUJ2CYadNwxGmMJ9ZdpY7g4Z3UvpdumYEifcg"
+  },
+  "deployed_slots": {
+    "workflow_registry": 461666985,
+    "execution_vault": 461667017,
+    "condition_oracle": 461667034
+  },
+  "deployed_at": "2026-05-11T22:35:00Z"
+}

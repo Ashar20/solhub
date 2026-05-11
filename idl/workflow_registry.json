@@ -1,0 +1,313 @@
+{
+  "address": "Eemnq9Fv55B2TNi5zKNSQyQDd6CKFBUJMfcgtJUiJuFB",
+  "metadata": {
+    "name": "workflow_registry",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "record_execution",
+      "docs": [
+        "Called by platform authority after each successful execution.",
+        "Only the platform_authority stored in the workflow account may call this."
+      ],
+      "discriminator": [
+        231,
+        245,
+        144,
+        129,
+        178,
+        195,
+        89,
+        160
+      ],
+      "accounts": [
+        {
+          "name": "workflow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  111,
+                  114,
+                  107,
+                  102,
+                  108,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "workflow.owner",
+                "account": "WorkflowAccount"
+              },
+              {
+                "kind": "account",
+                "path": "workflow.name",
+                "account": "WorkflowAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "platform_authority",
+          "signer": true,
+          "relations": [
+            "workflow"
+          ]
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "register_workflow",
+      "docs": [
+        "Register a new workflow on-chain.",
+        "Owner signs. Steps are stored off-chain (IPFS/DB); only hash stored here."
+      ],
+      "discriminator": [
+        100,
+        186,
+        221,
+        117,
+        110,
+        120,
+        22,
+        96
+      ],
+      "accounts": [
+        {
+          "name": "workflow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  111,
+                  114,
+                  107,
+                  102,
+                  108,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "arg",
+                "path": "params.name"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "platform_authority",
+          "docs": [
+            "The platform authority that will be stored in the workflow for future record_execution calls."
+          ],
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "RegisterParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_workflow_status",
+      "docs": [
+        "Toggle workflow active/inactive. Owner only."
+      ],
+      "discriminator": [
+        102,
+        196,
+        49,
+        158,
+        147,
+        68,
+        5,
+        0
+      ],
+      "accounts": [
+        {
+          "name": "workflow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  111,
+                  114,
+                  107,
+                  102,
+                  108,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              },
+              {
+                "kind": "account",
+                "path": "workflow.name",
+                "account": "WorkflowAccount"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "workflow"
+          ]
+        }
+      ],
+      "args": [
+        {
+          "name": "is_active",
+          "type": "bool"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "WorkflowAccount",
+      "discriminator": [
+        8,
+        173,
+        41,
+        63,
+        228,
+        72,
+        100,
+        67
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Overflow",
+      "msg": "Arithmetic overflow"
+    }
+  ],
+  "types": [
+    {
+      "name": "RegisterParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "trigger_type",
+            "type": "u8"
+          },
+          {
+            "name": "steps_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "steps_cid",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WorkflowAccount",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "trigger_type",
+            "type": "u8"
+          },
+          {
+            "name": "steps_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "steps_cid",
+            "type": "string"
+          },
+          {
+            "name": "is_active",
+            "type": "bool"
+          },
+          {
+            "name": "execution_count",
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "last_executed_at",
+            "type": "i64"
+          },
+          {
+            "name": "platform_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "address": "JwYqHkFc9w3bwZuK87FEE2jviVsVCDkp7RdBXQGey7h",
+  "metadata": {
+    "name": "condition_oracle",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "docs": [
+    "Default CPI interface for SolHub workflow conditions.",
+    "Any protocol deploys their own program with the same `evaluate` instruction",
+    "to become a native condition source. SolHub calls it via CPI before firing",
+    "an action step and reads the emitted ConditionEvaluated event from logs."
+  ],
+  "instructions": [
+    {
+      "name": "evaluate",
+      "docs": [
+        "Evaluates a condition and emits a ConditionEvaluated event.",
+        "Default implementation always emits met = true.",
+        "",
+        "params: protocol-specific borsh-encoded condition parameters."
+      ],
+      "discriminator": [
+        179,
+        211,
+        142,
+        183,
+        108,
+        104,
+        20,
+        214
+      ],
+      "accounts": [
+        {
+          "name": "state_account"
+        },
+        {
+          "name": "caller",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": "bytes"
+        }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "ConditionEvaluated",
+      "discriminator": [
+        52,
+        88,
+        41,
+        208,
+        201,
+        157,
+        201,
+        121
+      ]
+    }
+  ],
+  "types": [
+    {
+      "name": "ConditionEvaluated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "met",
+            "type": "bool"
+          },
+          {
+            "name": "params_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "evaluated_at",
+            "type": "i64"
+          }
+        ]
+      }
+    }
+  ]
+}

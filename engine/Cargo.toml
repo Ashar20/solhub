@@ -1,0 +1,47 @@
+[package]
+name = "engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "solhub-engine"
+path = "src/main.rs"
+
+[lib]
+name = "engine"
+path = "src/lib.rs"
+
+[features]
+# Enable live-net impls: Jito bundle builder, Yellowstone gRPC, ShredStream, Turnkey HSM signer.
+# These require live credentials/services; tests always use mock impls.
+live-net = []
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+async-trait = { workspace = true }
+reqwest = { workspace = true }
+solana-sdk = { workspace = true }
+solana-client = { workspace = true }
+bincode = { workspace = true }
+sha2 = { workspace = true }
+hmac = { workspace = true }
+hex = { workspace = true }
+base64 = { workspace = true }
+envy = "0.4"
+pyth-sdk-solana = "0.10"
+db = { path = "../db" }
+tokio-cron-scheduler = "0.13"
+
+[dev-dependencies]
+mockito = "1"
+pretty_assertions = "1"
+tokio = { workspace = true, features = ["full", "test-util"] }
