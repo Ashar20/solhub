@@ -130,3 +130,26 @@ describe("real vs stub", () => {
     expect(p?.status).toBe("stub");
   });
 });
+
+describe("REGISTRY new plugins", () => {
+  it("includes llm.complete", () => {
+    expect(findAction("llm", "complete")).not.toBe(null);
+  });
+  it("includes llm.analyze_sentiment", () => {
+    expect(findAction("llm", "analyze_sentiment")).not.toBe(null);
+  });
+  it("includes news.fetch_headlines + fetch_url", () => {
+    expect(findAction("news", "fetch_headlines")).not.toBe(null);
+    expect(findAction("news", "fetch_url")).not.toBe(null);
+  });
+  it("includes solhub.run_workflow", () => {
+    expect(findAction("solhub", "run_workflow")).not.toBe(null);
+  });
+  it("includes jupiter.quote (in addition to swap)", () => {
+    expect(findAction("jupiter", "quote")).not.toBe(null);
+    expect(findAction("jupiter", "swap")).not.toBe(null);
+  });
+  it("includes system.batch_transfer", () => {
+    expect(findAction("system", "batch_transfer")).not.toBe(null);
+  });
+});

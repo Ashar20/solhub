@@ -24,6 +24,19 @@ export const REGISTRY: PluginDef[] = [
         }),
         defaults: { input_mint: "", output_mint: "", amount: 1_000_000, slippage_bps: 50 },
       },
+      {
+        id: "quote",
+        name: "Get Swap Quote",
+        description: "Get a Jupiter best-route price quote (no transaction).",
+        type: "read",
+        schema: z.object({
+          input_mint: z.string().min(32),
+          output_mint: z.string().min(32),
+          amount: z.coerce.number().int().positive(),
+          slippage_bps: z.coerce.number().int().min(0).max(10_000).default(50),
+        }),
+        defaults: { input_mint: "", output_mint: "", amount: 1_000_000, slippage_bps: 50 },
+      },
     ],
   },
   {
@@ -92,6 +105,26 @@ export const REGISTRY: PluginDef[] = [
         }),
         defaults: { account: "" },
       },
+      {
+        id: "batch_transfer",
+        name: "Batch SOL Transfer",
+        description: "Atomically transfer SOL to multiple recipients in one transaction. Params: transfers (JSON array of {to, lamports}).",
+        type: "transaction",
+        // ZodForm does not yet render nested arrays; this field renders as a
+        // plain text input and the JSON is parsed at submit time. UX follow-up: #TODO
+        schema: z.object({
+          transfers: z.preprocess(
+            (v) => {
+              if (typeof v === "string") {
+                try { return JSON.parse(v); } catch { return v; }
+              }
+              return v;
+            },
+            z.array(z.object({ to: z.string(), lamports: z.coerce.number().int().positive() })).min(1).max(15),
+          ),
+        }),
+        defaults: { transfers: '[{"to":"","lamports":1000000}]' },
+      },
     ],
   },
   {
@@ -143,6 +176,88 @@ export const REGISTRY: PluginDef[] = [
           color: z.coerce.number().int().optional(),
         }),
         defaults: { webhook_url: "", title: "", description: "" },
+      },
+    ],
+  },
+  {
+    id: "llm",
+    name: "LLM",
+    category: "logic",
+    status: "real",
+    actions: [
+      {
+        id: "complete",
+        name: "Chat Completion",
+        description: "Send a prompt to the LLM and return the response text.",
+        type: "read",
+        schema: z.object({
+          prompt: z.string().min(1),
+          system: z.string().optional(),
+          model: z.string().optional(),
+          max_tokens: z.coerce.number().int().positive().default(512),
+          temperature: z.coerce.number().min(0).max(2).default(0.2),
+        }),
+        defaults: { prompt: "", system: "", model: "", max_tokens: 512, temperature: 0.2 },
+      },
+      {
+        id: "analyze_sentiment",
+        name: "Sentiment Analysis",
+        description: "Analyze sentiment of a text input (returns positive, neutral, or negative with score).",
+        type: "read",
+        schema: z.object({
+          text: z.string().min(1),
+          context: z.string().optional(),
+        }),
+        defaults: { text: "", context: "" },
+      },
+    ],
+  },
+  {
+    id: "news",
+    name: "News",
+    category: "logic",
+    status: "real",
+    actions: [
+      {
+        id: "fetch_headlines",
+        name: "Fetch Crypto Headlines",
+        description: "Fetch the latest crypto news headlines from the configured RSS source.",
+        type: "read",
+        schema: z.object({
+          limit: z.coerce.number().int().positive().default(5),
+          feed_url: z.string().url().optional(),
+        }),
+        defaults: { limit: 5, feed_url: "" },
+      },
+      {
+        id: "fetch_url",
+        name: "Fetch URL Body",
+        description: "Fetch the body of an arbitrary URL (text).",
+        type: "read",
+        schema: z.object({
+          url: z.string().url(),
+          max_bytes: z.coerce.number().int().positive().default(65536),
+        }),
+        defaults: { url: "", max_bytes: 65536 },
+      },
+    ],
+  },
+  {
+    id: "solhub",
+    name: "SolHub",
+    category: "logic",
+    status: "real",
+    actions: [
+      {
+        id: "run_workflow",
+        name: "Run Sub-Workflow",
+        description: "Trigger another workflow and wait for its terminal state. Max depth 3.",
+        type: "read",
+        schema: z.object({
+          workflow_id: z.string().uuid(),
+          timeout_secs: z.coerce.number().int().positive().default(60),
+        }),
+        defaults: { workflow_id: "", timeout_secs: 60 },
       },
     ],
   },
