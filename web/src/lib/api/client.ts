@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export class ApiError extends Error {
-  constructor(public status: number, public code: string, message: string) {
+  constructor(public status: number, public code: string, message: string, public details?: unknown) {
     super(message);
     this.name = "ApiError";
   }
@@ -32,6 +32,8 @@ export interface RequestOpts {
   anonymous?: boolean;
   /** Optional override of the base URL — used for tests. */
   baseUrl?: string;
+  /** Optional additional headers merged into the request. */
+  extraHeaders?: Record<string, string>;
 }
 
 export async function apiRequest<T>(
@@ -51,6 +53,9 @@ export async function apiRequest<T>(
   if (!opts.anonymous) {
     const tok = getToken();
     if (tok) headers["Authorization"] = `Bearer ${tok}`;
+  }
+  if (opts.extraHeaders) {
+    Object.assign(headers, opts.extraHeaders);
   }
 
   const res = await fetch(url.toString(), {
@@ -75,15 +80,18 @@ export async function apiRequest<T>(
   if (!res.ok) {
     let code = "http_error";
     let message = res.statusText || `HTTP ${res.status}`;
+    let details: unknown = undefined;
     try {
-      const j = await res.json();
+      const raw = await res.text();
+      const j = JSON.parse(raw);
       if (typeof j?.code === "string") code = j.code;
       if (typeof j?.message === "string") message = j.message;
       else if (typeof j?.error === "string") message = j.error;
+      details = j;
     } catch {
       // response was not JSON — keep statusText
     }
-    throw new ApiError(res.status, code, message);
+    throw new ApiError(res.status, code, message, details);
   }
 
   if (res.status === 204) {

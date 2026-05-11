@@ -34,17 +34,52 @@ export const publishToHub = (body: PublishHubBody) =>
   });
 
 /**
+ * Public payment requirements for a hub workflow.
+ * GET /v1/hub/:id/payment_info — PUBLIC, no auth required.
+ *
+ * NOTE: Despite the name, fee_per_exec_usdc is reused as lamports for the MVP.
+ * The amount_lamports field in the response is the actual SOL lamport amount.
+ */
+export const PaymentRequirementsSchema = z.object({
+  network: z.string(),
+  asset: z.string(),
+  amount_lamports: z.coerce.number().int().nonnegative(),
+  recipient: z.string(),
+  memo: z.string(),
+});
+export type PaymentRequirements = z.infer<typeof PaymentRequirementsSchema>;
+
+export const paymentInfo = (id: string) =>
+  apiRequest(`/v1/hub/${id}/payment_info`, PaymentRequirementsSchema, { anonymous: true });
+
+const CallResponse = z.object({
+  run_id: z.string().uuid(),
+  status: z.string().optional(),
+});
+
+export interface CallHubOpts {
+  params?: Record<string, unknown>;
+  /** Base58 Solana tx signature that paid the fee, if required. */
+  paymentSignature?: string;
+}
+
+/**
  * Call (trigger) a public hub workflow.
  * POST /v1/hub/:id/call — requires auth (api/src/app.rs:46).
  * Returns { run_id, status } (api/src/routes/hub.rs:114-117).
  *
- * NOTE: GET /v1/hub/:id does not exist in the current backend — only
- * the list and call+publish endpoints are registered. Phase E will add
- * a detail endpoint once the backend grows it.
+ * Supports x402 payment retry: if the workflow requires payment, callers should
+ * first obtain a tx signature (via buildPaymentTx + sendTransaction) then pass it
+ * as paymentSignature. The header format is: X-PAYMENT: solana:devnet:tx:<sig>
  */
-export const callHubWorkflow = (id: string) =>
-  apiRequest(
-    `/v1/hub/${id}/call`,
-    z.object({ run_id: z.string().uuid(), status: z.string() }),
-    { method: "POST" },
-  );
+export async function callHubWorkflow(id: string, opts: CallHubOpts = {}) {
+  const headers: Record<string, string> = {};
+  if (opts.paymentSignature) {
+    headers["X-PAYMENT"] = `solana:devnet:tx:${opts.paymentSignature}`;
+  }
+  return apiRequest(`/v1/hub/${id}/call`, CallResponse, {
+    method: "POST",
+    body: opts.params ?? {},
+    extraHeaders: headers,
+  });
+}
