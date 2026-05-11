@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Node, Edge } from "reactflow";
-import { useWorkflow } from "@/lib/hooks/use-workflows";
+import { useWorkflow, useWorkflows } from "@/lib/hooks/use-workflows";
 import { useDraft } from "@/lib/hooks/use-draft";
 import { findAction } from "@/lib/plugins/registry";
 import {
@@ -97,6 +97,7 @@ export function BuilderShell({ id }: BuilderShellProps) {
   const update = useUpdateWorkflow(isNew ? "" : id);
   const trigger = useTriggerWorkflow();
 
+  const { data: allWorkflows } = useWorkflows();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -216,6 +217,35 @@ export function BuilderShell({ id }: BuilderShellProps) {
     return () => clearTimeout(t);
   }, [name, nodes, edges, params, saveDraft]);
 
+  // Keep sub-workflow node labels in sync with picked workflow_id → workflow name.
+  // Runs only when allWorkflows or params change; uses functional setNodes to avoid
+  // adding `nodes` to the dependency array (which would create an update loop).
+  useEffect(() => {
+    if (!allWorkflows) return;
+    setNodes((prev) => {
+      let changed = false;
+      const next = prev.map((n) => {
+        if (n.data.plugin !== "solhub" || n.data.action !== "run_workflow") return n;
+        const pickedId = params[n.id]?.workflow_id;
+        if (typeof pickedId !== "string" || !pickedId) {
+          if (n.data.subWorkflowName != null) {
+            changed = true;
+            return { ...n, data: { ...n.data, subWorkflowName: undefined } };
+          }
+          return n;
+        }
+        const picked = allWorkflows.find((w) => w.id === pickedId);
+        const newName = picked?.name;
+        if (n.data.subWorkflowName !== newName) {
+          changed = true;
+          return { ...n, data: { ...n.data, subWorkflowName: newName } };
+        }
+        return n;
+      });
+      return changed ? next : prev;
+    });
+  }, [allWorkflows, params]);
+
   function addStep(plugin: string, action: string) {
     const id = `step_${Math.random().toString(36).slice(2, 8)}`;
     const found = findAction(plugin, action);
@@ -301,6 +331,7 @@ export function BuilderShell({ id }: BuilderShellProps) {
             params={selectedParams}
             onParamsChange={setSelectedParams}
             onDelete={deleteSelected}
+            currentWorkflowId={isNew ? undefined : id}
           />
         </aside>
       </div>
