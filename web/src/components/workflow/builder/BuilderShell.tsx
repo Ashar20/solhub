@@ -7,6 +7,7 @@ import { Btn } from "@/components/primitives/Btn";
 import { Pill } from "@/components/primitives/Pill";
 import { SolhubLogo } from "@/components/primitives/SolhubLogo";
 import { Canvas } from "./Canvas";
+import { Inspector } from "./Inspector";
 import { ToolPalette } from "./ToolPalette";
 import type { StepNodeData } from "./StepNode";
 
@@ -42,8 +43,6 @@ export function BuilderShell({ id }: BuilderShellProps) {
   const [nodes, setNodes] = useState<Node<StepNodeData>[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  // params is read by Task 8 (Inspector); maintain here so addStep can seed defaults
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [params, setParams] = useState<Record<string, Record<string, unknown>>>({});
 
   useEffect(() => { if (data?.name) setName(data.name); }, [data?.name]);
@@ -69,6 +68,32 @@ export function BuilderShell({ id }: BuilderShellProps) {
       },
     ]);
     setParams((p) => ({ ...p, [id]: { ...(found?.action.defaults ?? {}) } }));
+  }
+
+  const selectedNode = nodes.find((n) => n.id === selectedId) ?? null;
+  const selectedFallbackParams =
+    selectedNode
+      ? (findAction(selectedNode.data.plugin, selectedNode.data.action)?.action.defaults ?? {})
+      : {};
+  const selectedParams: Record<string, unknown> = selectedId
+    ? (params[selectedId] ?? selectedFallbackParams)
+    : {};
+
+  function setSelectedParams(v: Record<string, unknown>) {
+    if (!selectedId) return;
+    setParams((p) => ({ ...p, [selectedId]: v }));
+  }
+
+  function deleteSelected() {
+    if (!selectedId) return;
+    setNodes((n) => n.filter((x) => x.id !== selectedId));
+    setEdges((e) => e.filter((x) => x.source !== selectedId && x.target !== selectedId));
+    setParams((p) => {
+      const next = { ...p };
+      delete next[selectedId];
+      return next;
+    });
+    setSelectedId(null);
   }
 
   return (
@@ -105,9 +130,12 @@ export function BuilderShell({ id }: BuilderShellProps) {
           />
         </main>
         <aside className="border-l border-ink-200 bg-white overflow-y-auto">
-          <div className="p-3 text-[11px] font-mono text-ink-500">
-            selected: {selectedId ?? "none"}
-          </div>
+          <Inspector
+            node={selectedNode}
+            params={selectedParams}
+            onParamsChange={setSelectedParams}
+            onDelete={deleteSelected}
+          />
         </aside>
       </div>
     </div>
